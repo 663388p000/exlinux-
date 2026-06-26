@@ -99,28 +99,13 @@
 #include <asm/sections.h>
 #include <asm/cacheflush.h>
 
-#ifdef CONFIG_SEC_EXT
-#include <linux/sec_ext.h>
-#endif
-
-#ifdef CONFIG_RKP
-#include <linux/rkp.h>
-#endif
-#ifdef CONFIG_KDP
-#include <linux/kdp.h>
-#endif
-
-#ifdef CONFIG_SECURITY_DEFEX
-#include <linux/defex.h>
-void __init __weak defex_load_rules(void) { }
-#endif
-
 #define CREATE_TRACE_POINTS
 #include <trace/events/initcall.h>
 
 static int kernel_init(void *);
 
 extern void init_IRQ(void);
+extern void fork_init(void);
 extern void radix_tree_init(void);
 
 /*
@@ -209,21 +194,13 @@ static bool __init obsolete_checksetup(char *line)
 			} else if (!p->setup_func) {
 				pr_warn("Parameter %s is obsolete, ignored\n",
 					p->str);
-				had_early_param = true;
-				goto fail;
-			} else {
-				set_memsize_reserved_name(p->str);
-				if (p->setup_func(line + n)) {
-					had_early_param = true;
-					goto fail;
-				}
-			}
+				return true;
+			} else if (p->setup_func(line + n))
+				return true;
 		}
 		p++;
 	} while (p < __setup_end);
 
-fail:
-	unset_memsize_reserved_name();
 	return had_early_param;
 }
 
@@ -465,10 +442,6 @@ static noinline void __ref rest_init(void)
 	cpu_startup_entry(CPUHP_ONLINE);
 }
 
-#ifdef CONFIG_KDP_NS
-int __is_kdp_recovery __kdp_ro = 0;
-#endif
-
 /* Check for early params. */
 static int __init do_early_param(char *param, char *val,
 				 const char *unused, void *arg)
@@ -480,21 +453,11 @@ static int __init do_early_param(char *param, char *val,
 		    (strcmp(param, "console") == 0 &&
 		     strcmp(p->str, "earlycon") == 0)
 		) {
-			set_memsize_reserved_name(p->str);
 			if (p->setup_func(val) != 0)
 				pr_warn("Malformed early option '%s'\n", param);
 		}
 	}
-	unset_memsize_reserved_name();
 	/* We accept everything at this stage. */
-
-#ifdef CONFIG_KDP_NS
-	if ((strncmp(param, "bootmode", 9) == 0)) {
-		if ((strncmp(val, "2", 2) == 0))
-			__is_kdp_recovery = 1;
-	}
-#endif
-
 	return 0;
 }
 
@@ -544,43 +507,17 @@ static inline void initcall_debug_enable(void)
 }
 #endif
 
-/* Report memory auto-initialization states for this boot. */
-static void __init report_meminit(void)
-{
-	const char *stack;
-
-	if (IS_ENABLED(CONFIG_INIT_STACK_ALL))
-		stack = "all";
-	else if (IS_ENABLED(CONFIG_GCC_PLUGIN_STRUCTLEAK_BYREF_ALL))
-		stack = "byref_all";
-	else if (IS_ENABLED(CONFIG_GCC_PLUGIN_STRUCTLEAK_BYREF))
-		stack = "byref";
-	else if (IS_ENABLED(CONFIG_GCC_PLUGIN_STRUCTLEAK_USER))
-		stack = "__user";
-	else
-		stack = "off";
-
-	pr_info("mem auto-init: stack:%s, heap alloc:%s, heap free:%s\n",
-		stack, want_init_on_alloc(GFP_KERNEL) ? "on" : "off",
-		want_init_on_free() ? "on" : "off");
-	if (want_init_on_free())
-		pr_info("mem auto-init: clearing system memory may take some time...\n");
-}
-
 /*
  * Set up kernel memory allocators
  */
 static void __init mm_init(void)
 {
-	set_memsize_kernel_type(MEMSIZE_KERNEL_MM_INIT);
 	/*
 	 * page_ext requires contiguous pages,
 	 * bigger than MAX_ORDER unless SPARSEMEM.
 	 */
 	page_ext_init_flatmem();
-	report_meminit();
 	mem_init();
-	set_memsize_kernel_type(MEMSIZE_KERNEL_STOP);
 	kmem_cache_init();
 	pgtable_init();
 	vmalloc_init();
@@ -596,7 +533,6 @@ asmlinkage __visible void __init start_kernel(void)
 	char *command_line;
 	char *after_dashes;
 
-	set_memsize_kernel_type(MEMSIZE_KERNEL_OTHERS);
 	set_task_stack_end_magic(&init_task);
 	smp_setup_processor_id();
 	debug_objects_early_init();
@@ -613,10 +549,14 @@ asmlinkage __visible void __init start_kernel(void)
 	boot_cpu_init();
 	page_address_init();
 	pr_notice("%s", linux_banner);
-#ifdef CONFIG_RKP
-	rkp_robuffer_init();
-#endif
 	setup_arch(&command_line);
+	/*
+	 * Set up the the initial canary and entropy after arch
+	 * and after adding latent and command line entropy.
+	 */
+	add_latent_entropy();
+	add_device_randomness(command_line, strlen(command_line));
+	boot_init_stack_canary();
 	mm_init_cpumask(&init_mm);
 	setup_command_line(command_line);
 	setup_nr_cpu_ids();
@@ -628,8 +568,6 @@ asmlinkage __visible void __init start_kernel(void)
 	page_alloc_init();
 
 	pr_notice("Kernel command line: %s\n", boot_command_line);
-	/* parameters may set static keys */
-	jump_label_init();
 	parse_early_param();
 	after_dashes = parse_args("Booting kernel",
 				  static_command_line, __start___param,
@@ -638,6 +576,8 @@ asmlinkage __visible void __init start_kernel(void)
 	if (!IS_ERR_OR_NULL(after_dashes))
 		parse_args("Setting init args", after_dashes, NULL, 0, -1, -1,
 			   NULL, set_init_arg);
+
+	jump_label_init();
 
 	/*
 	 * These use large bootmem allocations and must precede
@@ -648,12 +588,7 @@ asmlinkage __visible void __init start_kernel(void)
 	sort_main_extable();
 	trap_init();
 	mm_init();
-#ifdef CONFIG_RKP
-	rkp_init();
-#endif
-#ifdef CONFIG_KDP
-	kdp_enable = 1;
-#endif
+
 	ftrace_init();
 
 	/* trace_printk can be enabled here */
@@ -706,20 +641,6 @@ asmlinkage __visible void __init start_kernel(void)
 	hrtimers_init();
 	softirq_init();
 	timekeeping_init();
-
-	/*
-	 * For best initial stack canary entropy, prepare it after:
-	 * - setup_arch() for any UEFI RNG entropy and boot cmdline access
-	 * - timekeeping_init() for ktime entropy used in rand_initialize()
-	 * - rand_initialize() to get any arch-specific entropy like RDRAND
-	 * - add_latent_entropy() to get any latent entropy
-	 * - adding command line entropy
-	 */
-	rand_initialize();
-	add_latent_entropy();
-	add_device_randomness(command_line, strlen(command_line));
-	boot_init_stack_canary();
-
 	time_init();
 	printk_safe_init();
 	perf_event_init();
@@ -768,6 +689,7 @@ asmlinkage __visible void __init start_kernel(void)
 		initrd_start = 0;
 	}
 #endif
+	page_ext_init();
 	kmemleak_init();
 	debug_objects_mem_init();
 	setup_per_cpu_pageset();
@@ -784,10 +706,6 @@ asmlinkage __visible void __init start_kernel(void)
 		efi_enter_virtual_mode();
 #endif
 	thread_stack_cache_init();
-#ifdef CONFIG_KDP
-	if (kdp_enable)
-		kdp_init();
-#endif
 	cred_init();
 	fork_init();
 	proc_caches_init();
@@ -901,41 +819,6 @@ static bool __init_or_module initcall_blacklisted(initcall_t fn)
 #endif
 __setup("initcall_blacklist=", initcall_blacklist);
 
-#ifdef CONFIG_SEC_BOOTSTAT
-
-static bool __init_or_module initcall_sec_debug = true;
-
-static int __init_or_module do_one_initcall_sec_debug(initcall_t fn)
-{
-	ktime_t calltime, delta, rettime;
-	unsigned long long duration;
-	int ret;
-	struct device_init_time_entry *entry;
-
-	calltime = ktime_get();
-	ret = fn();
-	rettime = ktime_get();
-	delta = ktime_sub(rettime, calltime);
-	duration = (unsigned long long) ktime_to_ns(delta) >> 10;
-	if (duration > DEVICE_INIT_TIME_100MS) {
-		entry = kmalloc(sizeof(*entry), GFP_KERNEL);
-		if (!entry)
-			return -ENOMEM;
-		entry->buf = kasprintf(GFP_KERNEL, "%pf", fn);
-		if (!entry->buf) {
-			kfree(entry);
-			return -ENOMEM;
-		}
-		entry->duration = duration;
-		list_add(&entry->next, &device_init_time_list);
-		printk(KERN_DEBUG "initcall %pF returned %d after %lld usecs\n",
-			 fn, ret, duration);
-	}
-
-	return ret;
-}
-#endif
-
 static __init_or_module void
 trace_initcall_start_cb(void *data, initcall_t fn)
 {
@@ -998,17 +881,9 @@ int __init_or_module do_one_initcall(initcall_t fn)
 	if (initcall_blacklisted(fn))
 		return -EPERM;
 
-#ifdef CONFIG_SEC_BOOTSTAT
-	if (initcall_sec_debug)
-		ret = do_one_initcall_sec_debug(fn);
-	else {
-#endif
-		do_trace_initcall_start(fn);
-		ret = fn();
-		do_trace_initcall_finish(fn, ret);
-#ifdef CONFIG_SEC_BOOTSTAT
-	}
-#endif
+	do_trace_initcall_start(fn);
+	ret = fn();
+	do_trace_initcall_finish(fn, ret);
 
 	msgbuf[0] = 0;
 
@@ -1076,10 +951,6 @@ static void __init do_initcall_level(int level)
 	trace_initcall_level(initcall_level_names[level]);
 	for (fn = initcall_levels[level]; fn < initcall_levels[level+1]; fn++)
 		do_one_initcall(initcall_from_entry(fn));
-
-#ifdef CONFIG_SEC_BOOTSTAT
-	sec_bootstat_add_initcall(initcall_level_names[level]);
-#endif
 }
 
 static void __init do_initcalls(void)
@@ -1185,24 +1056,11 @@ static inline void mark_readonly(void)
 }
 #endif
 
-#ifdef CONFIG_SEC_GPIO_DVS
-extern void gpio_dvs_check_initgpio(void);
-#endif
-
 static int __ref kernel_init(void *unused)
 {
 	int ret;
 
 	kernel_init_freeable();
-#ifdef CONFIG_SEC_GPIO_DVS
-	/************************ Caution !!! ****************************/
-	/* This function must be located in appropriate INIT position
-	 * in accordance with the specification of each BB vendor.
-	 */
-	/************************ Caution !!! ****************************/
-	pr_info("%s: GPIO DVS: check init gpio\n", __func__);
-	gpio_dvs_check_initgpio();
-#endif /* CONFIG_SEC_GPIO_DVS */
 	/* need to finish all async __init code before freeing the memory */
 	async_synchronize_full();
 	ftrace_free_init_mem();
@@ -1223,12 +1081,8 @@ static int __ref kernel_init(void *unused)
 
 	if (ramdisk_execute_command) {
 		ret = run_init_process(ramdisk_execute_command);
-		if (!ret) {
-#ifdef CONFIG_RKP
-			rkp_deferred_init();
-#endif
+		if (!ret)
 			return 0;
-		}
 		pr_err("Failed to execute %s (error %d)\n",
 		       ramdisk_execute_command, ret);
 	}
@@ -1286,8 +1140,6 @@ static noinline void __init kernel_init_freeable(void)
 	sched_init_smp();
 
 	page_alloc_init_late();
-	/* Initialize page ext after all struct pages are initialized. */
-	page_ext_init();
 
 	do_basic_setup();
 
@@ -1322,7 +1174,4 @@ static noinline void __init kernel_init_freeable(void)
 
 	integrity_load_keys();
 	load_default_modules();
-#ifdef CONFIG_SECURITY_DEFEX
-	defex_load_rules();
-#endif
 }
