@@ -226,11 +226,6 @@ struct page_frag_cache {
 
 typedef unsigned long vm_flags_t;
 
-static inline atomic_t *compound_mapcount_ptr(struct page *page)
-{
-	return &page[1].compound_mapcount;
-}
-
 /*
  * A region containing a mapping of a non-memory backed file under NOMMU
  * conditions.  These are held in a global tree and are pinned by the VMAs that
@@ -295,18 +290,11 @@ struct vm_area_struct {
 	/*
 	 * For areas with an address space and backing store,
 	 * linkage into the address_space->i_mmap interval tree.
-	 *
-	 * For private anonymous mappings, a pointer to a null terminated string
-	 * in the user process containing the name given to the vma, or NULL
-	 * if unnamed.
 	 */
-	union {
-		struct {
-			struct rb_node rb;
-			unsigned long rb_subtree_last;
-		} shared;
-		const char __user *anon_name;
-	};
+	struct {
+		struct rb_node rb;
+		unsigned long rb_subtree_last;
+	} shared;
 
 	/*
 	 * A file's MAP_PRIVATE vma can be in both i_mmap tree and anon_vma
@@ -335,10 +323,6 @@ struct vm_area_struct {
 	struct mempolicy *vm_policy;	/* NUMA policy for the VMA */
 #endif
 	struct vm_userfaultfd_ctx vm_userfaultfd_ctx;
-#ifdef CONFIG_SPECULATIVE_PAGE_FAULT
-	seqcount_t vm_sequence;
-	atomic_t vm_ref_count;		/* see vma_get(), vma_put() */
-#endif
 } __randomize_layout;
 
 struct core_thread {
@@ -357,9 +341,6 @@ struct mm_struct {
 	struct {
 		struct vm_area_struct *mmap;		/* list of VMAs */
 		struct rb_root mm_rb;
-#ifdef CONFIG_SPECULATIVE_PAGE_FAULT
-		rwlock_t mm_rb_lock;
-#endif
 		u64 vmacache_seqnum;                   /* per-thread vmacache */
 #ifdef CONFIG_MMU
 		unsigned long (*get_unmapped_area) (struct file *filp,
@@ -667,14 +648,5 @@ enum tlb_flush_reason {
 typedef struct {
 	unsigned long val;
 } swp_entry_t;
-
-/* Return the name for an anonymous mapping or NULL for a file-backed mapping */
-static inline const char __user *vma_get_anon_name(struct vm_area_struct *vma)
-{
-	if (vma->vm_file)
-		return NULL;
-
-	return vma->anon_name;
-}
 
 #endif /* _LINUX_MM_TYPES_H */
