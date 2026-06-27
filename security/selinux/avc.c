@@ -34,12 +34,6 @@
 #include "avc_ss.h"
 #include "classmap.h"
 
-// [ SEC_SELINUX_PORTING_COMMON
-#ifdef SEC_SELINUX_DEBUG
-#include <linux/signal.h>
-#endif
-// ] SEC_SELINUX_PORTING_COMMON
-
 #define AVC_CACHE_SLOTS			512
 #define AVC_DEF_CACHE_THRESHOLD		512
 #define AVC_CACHE_RECLAIM		16
@@ -502,7 +496,7 @@ static inline int avc_xperms_audit(struct selinux_state *state,
 	if (likely(!audited))
 		return 0;
 	return slow_avc_audit(state, ssid, tsid, tclass, requested,
-			audited, denied, result, ad);
+			audited, denied, result, ad, 0);
 }
 
 static void avc_node_free(struct rcu_head *rhead)
@@ -695,37 +689,40 @@ static struct avc_node *avc_insert(struct selinux_avc *avc,
 	struct avc_node *pos, *node = NULL;
 	int hvalue;
 	unsigned long flag;
-	spinlock_t *lock;
-	struct hlist_head *head;
 
 	if (avc_latest_notif_update(avc, avd->seqno, 1))
-		return NULL;
+		goto out;
 
 	node = avc_alloc_node(avc);
-	if (!node)
-		return NULL;
+	if (node) {
+		struct hlist_head *head;
+		spinlock_t *lock;
+		int rc = 0;
 
-	avc_node_populate(node, ssid, tsid, tclass, avd);
-	if (avc_xperms_populate(node, xp_node)) {
-		avc_node_kill(avc, node);
-		return NULL;
-	}
-
-	hvalue = avc_hash(ssid, tsid, tclass);
-	head = &avc->avc_cache.slots[hvalue];
-	lock = &avc->avc_cache.slots_lock[hvalue];
-	spin_lock_irqsave(lock, flag);
-	hlist_for_each_entry(pos, head, list) {
-		if (pos->ae.ssid == ssid &&
-			pos->ae.tsid == tsid &&
-			pos->ae.tclass == tclass) {
-			avc_node_replace(avc, node, pos);
-			goto found;
+		hvalue = avc_hash(ssid, tsid, tclass);
+		avc_node_populate(node, ssid, tsid, tclass, avd);
+		rc = avc_xperms_populate(node, xp_node);
+		if (rc) {
+			kmem_cache_free(avc_node_cachep, node);
+			return NULL;
 		}
-	}
-	hlist_add_head_rcu(&node->list, head);
+		head = &avc->avc_cache.slots[hvalue];
+		lock = &avc->avc_cache.slots_lock[hvalue];
+
+		spin_lock_irqsave(lock, flag);
+		hlist_for_each_entry(pos, head, list) {
+			if (pos->ae.ssid == ssid &&
+			    pos->ae.tsid == tsid &&
+			    pos->ae.tclass == tclass) {
+				avc_node_replace(avc, node, pos);
+				goto found;
+			}
+		}
+		hlist_add_head_rcu(&node->list, head);
 found:
-	spin_unlock_irqrestore(lock, flag);
+		spin_unlock_irqrestore(lock, flag);
+	}
+out:
 	return node;
 }
 
@@ -769,7 +766,8 @@ static void avc_audit_post_callback(struct audit_buffer *ab, void *a)
 noinline int slow_avc_audit(struct selinux_state *state,
 			    u32 ssid, u32 tsid, u16 tclass,
 			    u32 requested, u32 audited, u32 denied, int result,
-			    struct common_audit_data *a)
+			    struct common_audit_data *a,
+			    unsigned int flags)
 {
 	struct common_audit_data stack_data;
 	struct selinux_audit_data sad;
@@ -778,6 +776,17 @@ noinline int slow_avc_audit(struct selinux_state *state,
 		a = &stack_data;
 		a->type = LSM_AUDIT_DATA_NONE;
 	}
+
+	/*
+	 * When in a RCU walk do the audit on the RCU retry.  This is because
+	 * the collection of the dname in an inode audit message is not RCU
+	 * safe.  Note this may drop some audits when the situation changes
+	 * during retry. However this is logically just as if the operation
+	 * happened a little later.
+	 */
+	if ((a->type == LSM_AUDIT_DATA_INODE) &&
+	    (flags & MAY_NOT_BLOCK))
+		return -ECHILD;
 
 	sad.tclass = tclass;
 	sad.requested = requested;
@@ -829,7 +838,6 @@ out:
  * @ssid,@tsid,@tclass : identifier of an AVC entry
  * @seqno : sequence number when decision was made
  * @xpd: extended_perms_decision to be added to the node
- * @flags: the AVC_* flags, e.g. AVC_NONBLOCKING, AVC_EXTENDED_PERMS, or 0.
  *
  * if a valid AVC entry doesn't exist,this function returns -ENOENT.
  * if kmalloc() called internal returns NULL, this function returns -ENOMEM.
@@ -847,21 +855,6 @@ static int avc_update_node(struct selinux_avc *avc,
 	struct avc_node *pos, *node, *orig = NULL;
 	struct hlist_head *head;
 	spinlock_t *lock;
-
-	/*
-	 * If we are in a non-blocking code path, e.g. VFS RCU walk,
-	 * then we must not add permissions to a cache entry
-	 * because we will not audit the denial.  Otherwise,
-	 * during the subsequent blocking retry (e.g. VFS ref walk), we
-	 * will find the permissions already granted in the cache entry
-	 * and won't audit anything at all, leading to silent denials in
-	 * permissive mode that only appear when in enforcing mode.
-	 *
-	 * See the corresponding handling of MAY_NOT_BLOCK in avc_audit()
-	 * and selinux_inode_permission().
-	 */
-	if (flags & AVC_NONBLOCKING)
-		return 0;
 
 	node = avc_alloc_node(avc);
 	if (!node) {
@@ -902,7 +895,7 @@ static int avc_update_node(struct selinux_avc *avc,
 	if (orig->ae.xp_node) {
 		rc = avc_xperms_populate(node, orig->ae.xp_node);
 		if (rc) {
-			avc_node_kill(avc, node);
+			kmem_cache_free(avc_node_cachep, node);
 			goto out_unlock;
 		}
 	}
@@ -1024,56 +1017,7 @@ static noinline int avc_denied(struct selinux_state *state,
 	if (flags & AVC_STRICT)
 		return -EACCES;
 
-// [ SEC_SELINUX_PORTING_COMMON
-#ifdef SEC_SELINUX_DEBUG
-	if ((requested & avd->auditallow) && !(avd->flags & AVD_FLAGS_PERMISSIVE)) {
-			char *scontext, *tcontext;
-			const char **perms;
-			int i, perm;
-			int rc1, rc2;
-			u32 scontext_len, tcontext_len;
-	
-			perms = secclass_map[tclass-1].perms;
-			i = 0;
-			perm = 1;
-			while (i < (sizeof(requested) * 8)) {
-				if ((perm & requested) && perms[i])
-					break;
-				i++;
-				perm <<= 1;
-			}
-	
-			rc1 = security_sid_to_context(state, ssid, &scontext, &scontext_len);
-			rc2 = security_sid_to_context(state, tsid, &tcontext, &tcontext_len);
-	
-			if (rc1 || rc2) {
-				pr_err("SELinux DEBUG : %s: ssid=%d tsid=%d tclass=%s perm=%s requested(%d) auditallow(%d)\n",
-			       __func__, ssid, tsid, secclass_map[tclass-1].name, perms[i], requested, avd->auditallow);
-			} else {
-				pr_err("SELinux DEBUG : %s: scontext=%s tcontext=%s tclass=%s perm=%s requested(%d) auditallow(%d)\n",
-			       __func__, scontext, tcontext, secclass_map[tclass-1].name, perms[i], requested, avd->auditallow);
-			}
-
-    		/* print call stack */
-    		pr_err("SELinux DEBUG : FATAL denial and start dump_stack\n");
-	    	dump_stack();
-
-		    /* enforcing : SIGABRT and take debuggerd log */
-            if (!(avd->flags & AVD_FLAGS_PERMISSIVE)) {
-			    pr_err("SELinux DEBUG : send SIGABRT to current tsk\n");
-			    send_sig(SIGABRT, current, 2);
-		    }
-
-		    if (!rc1)
-			    kfree(scontext);
-	        if (!rc2)
-			    kfree(tcontext);
-
-	}
-#endif
-// ] SEC_SELINUX_PORTING_COMMON
-
-	if (selinux_enforcing &&
+	if (enforcing_enabled(state) &&
 	    !(avd->flags & AVD_FLAGS_PERMISSIVE))
 		return -EACCES;
 
@@ -1171,7 +1115,7 @@ decision:
  * @tsid: target security identifier
  * @tclass: target security class
  * @requested: requested permissions, interpreted based on @tclass
- * @flags:  AVC_STRICT, AVC_NONBLOCKING, or 0
+ * @flags:  AVC_STRICT or 0
  * @avd: access vector decisions
  *
  * Check the AVC to determine whether the @requested permissions are granted
@@ -1255,8 +1199,7 @@ int avc_has_perm_flags(struct selinux_state *state,
 	struct av_decision avd;
 	int rc, rc2;
 
-	rc = avc_has_perm_noaudit(state, ssid, tsid, tclass, requested,
-				  (flags & MAY_NOT_BLOCK) ? AVC_NONBLOCKING : 0,
+	rc = avc_has_perm_noaudit(state, ssid, tsid, tclass, requested, 0,
 				  &avd);
 
 	rc2 = avc_audit(state, ssid, tsid, tclass, requested, &avd, rc,
