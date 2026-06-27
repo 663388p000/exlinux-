@@ -47,11 +47,6 @@ void generic_bug_clear_once(void);
 
 #else	/* !CONFIG_GENERIC_BUG */
 
-static inline void *find_bug(unsigned long bugaddr)
-{
-	return NULL;
-}
-
 static inline enum bug_trap_type report_bug(unsigned long bug_addr,
 					    struct pt_regs *regs)
 {
@@ -73,7 +68,7 @@ static inline __must_check bool check_data_corruption(bool v) { return v; }
 		bool corruption = unlikely(condition);			 \
 		if (corruption) {					 \
 			if (IS_ENABLED(CONFIG_BUG_ON_DATA_CORRUPTION)) { \
-				pr_auto(ASL1, fmt, ##__VA_ARGS__);	 \
+				pr_err(fmt, ##__VA_ARGS__);		 \
 				BUG();					 \
 			} else						 \
 				WARN(1, fmt, ##__VA_ARGS__);		 \
