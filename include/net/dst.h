@@ -93,7 +93,7 @@ struct dst_entry {
 struct dst_metrics {
 	u32		metrics[RTAX_MAX];
 	refcount_t	refcnt;
-} __aligned(4);		/* Low pointer bits contain DST_METRICS_FLAGS */
+};
 extern const struct dst_metrics dst_default_metrics;
 
 u32 *dst_cow_metrics_generic(struct dst_entry *dst, unsigned long old);
@@ -313,9 +313,8 @@ static inline bool dst_hold_safe(struct dst_entry *dst)
  * @skb: buffer
  *
  * If dst is not yet refcounted and not destroyed, grab a ref on it.
- * Returns true if dst is refcounted.
  */
-static inline bool skb_dst_force(struct sk_buff *skb)
+static inline void skb_dst_force(struct sk_buff *skb)
 {
 	if (skb_dst_is_noref(skb)) {
 		struct dst_entry *dst = skb_dst(skb);
@@ -326,8 +325,6 @@ static inline bool skb_dst_force(struct sk_buff *skb)
 
 		skb->_skb_refdst = (unsigned long)dst;
 	}
-
-	return skb->_skb_refdst != 0UL;
 }
 
 
@@ -527,16 +524,7 @@ static inline void skb_dst_update_pmtu(struct sk_buff *skb, u32 mtu)
 	struct dst_entry *dst = skb_dst(skb);
 
 	if (dst && dst->ops->update_pmtu)
-		dst->ops->update_pmtu(dst, NULL, skb, mtu, true);
-}
-
-/* update dst pmtu but not do neighbor confirm */
-static inline void skb_dst_update_pmtu_no_confirm(struct sk_buff *skb, u32 mtu)
-{
-	struct dst_entry *dst = skb_dst(skb);
-
-	if (dst && dst->ops->update_pmtu)
-		dst->ops->update_pmtu(dst, NULL, skb, mtu, false);
+		dst->ops->update_pmtu(dst, NULL, skb, mtu);
 }
 
 static inline void skb_tunnel_check_pmtu(struct sk_buff *skb,
@@ -546,7 +534,7 @@ static inline void skb_tunnel_check_pmtu(struct sk_buff *skb,
 	u32 encap_mtu = dst_mtu(encap_dst);
 
 	if (skb->len > encap_mtu - headroom)
-		skb_dst_update_pmtu_no_confirm(skb, encap_mtu - headroom);
+		skb_dst_update_pmtu(skb, encap_mtu - headroom);
 }
 
 #endif /* _NET_DST_H */
