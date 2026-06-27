@@ -221,18 +221,13 @@ static int binder_update_page_range(struct binder_alloc *alloc, int allocate,
 	}
 
 	if (need_mm && mmget_not_zero(alloc->vma_vm_mm))
-		mm = alloc->vma_vm_mm;
+        mm = alloc->vma_vm_mm;
 
-	if (mm) {
-		down_read(&mm->mmap_sem);
-		if (!mmget_still_valid(mm)) {
-			if (allocate == 0)
-				goto free_range;
-			goto err_no_vma;
-		}
-		vma = alloc->vma;
-	}
+if (mm) {
+        down_read(&mm->mmap_sem);
 
+        vma = alloc->vma;
+          }
 	if (!vma && need_mm) {
 		binder_alloc_debug(BINDER_DEBUG_USER_ERROR,
 				   "%d: binder_alloc_buf failed to map pages in userspace, no vma\n",
