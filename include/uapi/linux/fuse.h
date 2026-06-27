@@ -116,9 +116,6 @@
  *
  *  7.27
  *  - add FUSE_ABORT_ERROR
- * 
- *  7.28
- *  - add FUSE_MAX_PAGES, add max_pages to init_out
  */
 
 #ifndef _LINUX_FUSE_H
@@ -222,12 +219,10 @@ struct fuse_file_lock {
  * FOPEN_DIRECT_IO: bypass page cache for this open file
  * FOPEN_KEEP_CACHE: don't invalidate the data cache on open
  * FOPEN_NONSEEKABLE: the file is not seekable
- * FOPEN_STREAM: the file is stream-like (no file position at all)
  */
 #define FOPEN_DIRECT_IO		(1 << 0)
 #define FOPEN_KEEP_CACHE	(1 << 1)
 #define FOPEN_NONSEEKABLE	(1 << 2)
-#define FOPEN_STREAM		(1 << 4)
 
 /**
  * INIT request/reply flags
@@ -254,7 +249,6 @@ struct fuse_file_lock {
  * FUSE_HANDLE_KILLPRIV: fs handles killing suid/sgid/cap on write/chown/trunc
  * FUSE_POSIX_ACL: filesystem supports posix acls
  * FUSE_ABORT_ERROR: reading the device after abort returns ECONNABORTED
- * FUSE_MAX_PAGES: init_out.max_pages contains the max number of req pages
  */
 #define FUSE_ASYNC_READ		(1 << 0)
 #define FUSE_POSIX_LOCKS	(1 << 1)
@@ -278,7 +272,6 @@ struct fuse_file_lock {
 #define FUSE_HANDLE_KILLPRIV	(1 << 19)
 #define FUSE_POSIX_ACL		(1 << 20)
 #define FUSE_ABORT_ERROR	(1 << 21)
-#define FUSE_MAX_PAGES		(1 << 22)
 
 /**
  * CUSE INIT request/reply flags
@@ -388,7 +381,6 @@ enum fuse_opcode {
 	FUSE_READDIRPLUS   = 44,
 	FUSE_RENAME2       = 45,
 	FUSE_LSEEK         = 46,
-	FUSE_CANONICAL_PATH= 2016,
 
 	/* CUSE specific operations */
 	CUSE_INIT          = 4096,
@@ -618,9 +610,7 @@ struct fuse_init_out {
 	uint16_t	congestion_threshold;
 	uint32_t	max_write;
 	uint32_t	time_gran;
-	uint16_t	max_pages;
-	uint16_t	padding;
-	uint32_t	unused[8];
+	uint32_t	unused[9];
 };
 
 #define CUSE_INIT_INFO_MAX 4096
