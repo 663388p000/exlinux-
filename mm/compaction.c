@@ -22,7 +22,6 @@
 #include <linux/kthread.h>
 #include <linux/freezer.h>
 #include <linux/page_owner.h>
-#include <linux/psi.h>
 #include "internal.h"
 
 #ifdef CONFIG_COMPACTION
@@ -237,70 +236,6 @@ static bool pageblock_skip_persistent(struct page *page)
 	return false;
 }
 
-static bool
-__reset_isolation_pfn(struct zone *zone, unsigned long pfn, bool check_source,
-							bool check_target)
-{
-	struct page *page = pfn_to_online_page(pfn);
-	struct page *end_page;
-	unsigned long block_pfn;
-
-	if (!page)
-		return false;
-	if (zone != page_zone(page))
-		return false;
-	if (pageblock_skip_persistent(page))
-		return false;
-
-	/*
-	 * If skip is already cleared do no further checking once the
-	 * restart points have been set.
-	 */
-	if (check_source && check_target && !get_pageblock_skip(page))
-		return true;
-
-	/*
-	 * If clearing skip for the target scanner, do not select a
-	 * non-movable pageblock as the starting point.
-	 */
-	if (!check_source && check_target &&
-	    get_pageblock_migratetype(page) != MIGRATE_MOVABLE)
-		return false;
-
-	/*
-	 * Only clear the hint if a sample indicates there is either a
-	 * free page or an LRU page in the block. One or other condition
-	 * is necessary for the block to be a migration source/target.
-	 */
-	block_pfn = pageblock_start_pfn(pfn);
-	pfn = max(block_pfn, zone->zone_start_pfn);
-	page = pfn_to_page(pfn);
-	if (zone != page_zone(page))
-		return false;
-	pfn = block_pfn + pageblock_nr_pages;
-	pfn = min(pfn, zone_end_pfn(zone));
-	end_page = pfn_to_page(pfn);
-
-	do {
-		if (pfn_valid_within(pfn)) {
-			if (check_source && PageLRU(page)) {
-				clear_pageblock_skip(page);
-				return true;
-			}
-
-			if (check_target && PageBuddy(page)) {
-				clear_pageblock_skip(page);
-				return true;
-			}
-		}
-
-		page += (1 << PAGE_ALLOC_COSTLY_ORDER);
-		pfn += (1 << PAGE_ALLOC_COSTLY_ORDER);
-	} while (page < end_page);
-
-	return false;
-}
-
 /*
  * This function is called to clear all cached information on pageblocks that
  * should be skipped for page isolation when the migrate and free page scanner
@@ -308,54 +243,30 @@ __reset_isolation_pfn(struct zone *zone, unsigned long pfn, bool check_source,
  */
 static void __reset_isolation_suitable(struct zone *zone)
 {
-	unsigned long migrate_pfn = zone->zone_start_pfn;
-	unsigned long free_pfn = zone_end_pfn(zone);
-	unsigned long reset_migrate = free_pfn;
-	unsigned long reset_free = migrate_pfn;
-	bool source_set = false;
-	bool free_set = false;
-
-	if (!zone->compact_blockskip_flush)
-		return;
+	unsigned long start_pfn = zone->zone_start_pfn;
+	unsigned long end_pfn = zone_end_pfn(zone);
+	unsigned long pfn;
 
 	zone->compact_blockskip_flush = false;
 
-	/*
-	 * Walk the zone and update pageblock skip information. Source looks
-	 * for PageLRU while target looks for PageBuddy. When the scanner
-	 * is found, both PageBuddy and PageLRU are checked as the pageblock
-	 * is suitable as both source and target.
-	 */
-	for (; migrate_pfn < free_pfn; migrate_pfn += pageblock_nr_pages,
-					free_pfn -= pageblock_nr_pages) {
+	/* Walk the zone and mark every pageblock as suitable for isolation */
+	for (pfn = start_pfn; pfn < end_pfn; pfn += pageblock_nr_pages) {
+		struct page *page;
+
 		cond_resched();
 
-		/* Update the migrate PFN */
-		if (__reset_isolation_pfn(zone, migrate_pfn, true, source_set) &&
-		    migrate_pfn < reset_migrate) {
-			source_set = true;
-			reset_migrate = migrate_pfn;
-			zone->compact_init_migrate_pfn = reset_migrate;
-			zone->compact_cached_migrate_pfn[0] = reset_migrate;
-			zone->compact_cached_migrate_pfn[1] = reset_migrate;
-		}
+		page = pfn_to_online_page(pfn);
+		if (!page)
+			continue;
+		if (zone != page_zone(page))
+			continue;
+		if (pageblock_skip_persistent(page))
+			continue;
 
-		/* Update the free PFN */
-		if (__reset_isolation_pfn(zone, free_pfn, free_set, true) &&
-		    free_pfn > reset_free) {
-			free_set = true;
-			reset_free = free_pfn;
-			zone->compact_init_free_pfn = reset_free;
-			zone->compact_cached_free_pfn = reset_free;
-		}
+		clear_pageblock_skip(page);
 	}
 
-	/* Leave no distance if no suitable block was reset */
-	if (reset_migrate >= reset_free) {
-		zone->compact_cached_migrate_pfn[0] = migrate_pfn;
-		zone->compact_cached_migrate_pfn[1] = migrate_pfn;
-		zone->compact_cached_free_pfn = free_pfn;
-	}
+	reset_cached_positions(zone);
 }
 
 void reset_isolation_suitable(pg_data_t *pgdat)
@@ -1130,8 +1041,8 @@ static bool suitable_migration_target(struct compact_control *cc,
 	if (cc->ignore_block_suitable)
 		return true;
 
-	/* If the block is MIGRATE_MOVABLE, allow migration */
-	if (get_pageblock_migratetype(page) == MIGRATE_MOVABLE)
+	/* If the block is MIGRATE_MOVABLE or MIGRATE_CMA, allow migration */
+	if (is_migrate_movable(get_pageblock_migratetype(page)))
 		return true;
 
 	/* Otherwise skip the block */
@@ -1450,6 +1361,12 @@ static enum compact_result __compact_finished(struct zone *zone,
 		if (!list_empty(&area->free_list[migratetype]))
 			return COMPACT_SUCCESS;
 
+#ifdef CONFIG_CMA
+		/* MIGRATE_MOVABLE can fallback on MIGRATE_CMA */
+		if (migratetype == MIGRATE_MOVABLE &&
+			!list_empty(&area->free_list[MIGRATE_CMA]))
+			return COMPACT_SUCCESS;
+#endif
 		/*
 		 * Job done if allocation would steal freepages from
 		 * other migratetype buddy lists.
@@ -1513,7 +1430,7 @@ static enum compact_result __compaction_suitable(struct zone *zone, int order,
 	if (is_via_compact_memory(order))
 		return COMPACT_CONTINUE;
 
-	watermark = wmark_pages(zone, alloc_flags & ALLOC_WMARK_MASK);
+	watermark = zone->watermark[alloc_flags & ALLOC_WMARK_MASK];
 	/*
 	 * If watermarks for high-order allocation are already met, there
 	 * should be no need for compaction at all.
@@ -1533,12 +1450,14 @@ static enum compact_result __compaction_suitable(struct zone *zone, int order,
 	 * if compaction succeeds.
 	 * For costly orders, we require low watermark instead of min for
 	 * compaction to proceed to increase its chances.
+	 * ALLOC_CMA is used, as pages in CMA pageblocks are considered
+	 * suitable migration targets
 	 */
 	watermark = (order > PAGE_ALLOC_COSTLY_ORDER) ?
 				low_wmark_pages(zone) : min_wmark_pages(zone);
 	watermark += compact_gap(order);
 	if (!__zone_watermark_ok(zone, 0, watermark, classzone_idx,
-						0, wmark_target))
+						ALLOC_CMA, wmark_target))
 		return COMPACT_SKIPPED;
 
 	return COMPACT_CONTINUE;
@@ -1621,17 +1540,6 @@ static enum compact_result compact_zone(struct zone *zone, struct compact_contro
 	unsigned long end_pfn = zone_end_pfn(zone);
 	const bool sync = cc->mode != MIGRATE_ASYNC;
 
-	/*
-	 * These counters track activities during zone compaction.  Initialize
-	 * them before compacting a new zone.
-	 */
-	cc->total_migrate_scanned = 0;
-	cc->total_free_scanned = 0;
-	cc->nr_migratepages = 0;
-	cc->nr_freepages = 0;
-	INIT_LIST_HEAD(&cc->freepages);
-	INIT_LIST_HEAD(&cc->migratepages);
-
 	cc->migratetype = gfpflags_to_migratetype(cc->gfp_mask);
 	ret = compaction_suitable(zone, cc->order, cc->alloc_flags,
 							cc->classzone_idx);
@@ -1671,7 +1579,7 @@ static enum compact_result compact_zone(struct zone *zone, struct compact_contro
 			zone->compact_cached_migrate_pfn[1] = cc->migrate_pfn;
 		}
 
-		if (cc->migrate_pfn <= cc->zone->compact_init_migrate_pfn)
+		if (cc->migrate_pfn == start_pfn)
 			cc->whole_zone = true;
 	}
 
@@ -1795,6 +1703,10 @@ static enum compact_result compact_zone_order(struct zone *zone, int order,
 {
 	enum compact_result ret;
 	struct compact_control cc = {
+		.nr_freepages = 0,
+		.nr_migratepages = 0,
+		.total_migrate_scanned = 0,
+		.total_free_scanned = 0,
 		.order = order,
 		.gfp_mask = gfp_mask,
 		.zone = zone,
@@ -1807,6 +1719,8 @@ static enum compact_result compact_zone_order(struct zone *zone, int order,
 		.ignore_skip_hint = (prio == MIN_COMPACT_PRIORITY),
 		.ignore_block_suitable = (prio == MIN_COMPACT_PRIORITY)
 	};
+	INIT_LIST_HEAD(&cc.freepages);
+	INIT_LIST_HEAD(&cc.migratepages);
 
 	ret = compact_zone(zone, &cc);
 
@@ -1905,6 +1819,8 @@ static void compact_node(int nid)
 	struct zone *zone;
 	struct compact_control cc = {
 		.order = -1,
+		.total_migrate_scanned = 0,
+		.total_free_scanned = 0,
 		.mode = MIGRATE_SYNC,
 		.ignore_skip_hint = true,
 		.whole_zone = true,
@@ -1918,7 +1834,11 @@ static void compact_node(int nid)
 		if (!populated_zone(zone))
 			continue;
 
+		cc.nr_freepages = 0;
+		cc.nr_migratepages = 0;
 		cc.zone = zone;
+		INIT_LIST_HEAD(&cc.freepages);
+		INIT_LIST_HEAD(&cc.migratepages);
 
 		compact_zone(zone, &cc);
 
@@ -2027,6 +1947,8 @@ static void kcompactd_do_work(pg_data_t *pgdat)
 	struct zone *zone;
 	struct compact_control cc = {
 		.order = pgdat->kcompactd_max_order,
+		.total_migrate_scanned = 0,
+		.total_free_scanned = 0,
 		.classzone_idx = pgdat->kcompactd_classzone_idx,
 		.mode = MIGRATE_SYNC_LIGHT,
 		.ignore_skip_hint = false,
@@ -2050,10 +1972,16 @@ static void kcompactd_do_work(pg_data_t *pgdat)
 							COMPACT_CONTINUE)
 			continue;
 
+		cc.nr_freepages = 0;
+		cc.nr_migratepages = 0;
+		cc.total_migrate_scanned = 0;
+		cc.total_free_scanned = 0;
+		cc.zone = zone;
+		INIT_LIST_HEAD(&cc.freepages);
+		INIT_LIST_HEAD(&cc.migratepages);
+
 		if (kthread_should_stop())
 			return;
-
-		cc.zone = zone;
 		status = compact_zone(zone, &cc);
 
 		if (status == COMPACT_SUCCESS) {
@@ -2140,15 +2068,11 @@ static int kcompactd(void *p)
 	pgdat->kcompactd_classzone_idx = pgdat->nr_zones - 1;
 
 	while (!kthread_should_stop()) {
-		unsigned long pflags;
-
 		trace_mm_compaction_kcompactd_sleep(pgdat->node_id);
 		wait_event_freezable(pgdat->kcompactd_wait,
 				kcompactd_work_requested(pgdat));
 
-		psi_memstall_enter(&pflags);
 		kcompactd_do_work(pgdat);
-		psi_memstall_leave(&pflags);
 	}
 
 	return 0;
