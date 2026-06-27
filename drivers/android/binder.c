@@ -5114,17 +5114,18 @@ static int binder_ioctl_set_ctx_mgr(struct file *filp,
 		goto out;
 	}
   	ret = security_binder_set_context_mgr(proc->tsk);
-       if (ret < 0)
-        goto out;
-	if (uid_valid(context->binder_context_mgr_uid)) {
-		if (!uid_eq(context->binder_context_mgr_uid, curr_euid)) {
-			pr_err("BINDER_SET_CONTEXT_MGR bad uid %d != %d\n",
-			       from_kuid(&init_user_ns, curr_euid),
-			       from_kuid(&init_user_ns,
-					 context->binder_context_mgr_uid));
-			ret = -EPERM;
-			goto out;
-		}
+if (ret < 0)
+	goto out;
+
+if (uid_valid(context->binder_context_mgr_uid)) {
+	if (!uid_eq(context->binder_context_mgr_uid, curr_euid)) {
+		pr_err("BINDER_SET_CONTEXT_MGR bad uid %d != %d\n",
+		       from_kuid(&init_user_ns, curr_euid),
+		       from_kuid(&init_user_ns,
+				 context->binder_context_mgr_uid));
+		ret = -EPERM;
+		goto out;
+          }	
 	} else {
 		context->binder_context_mgr_uid = curr_euid;
 	}
