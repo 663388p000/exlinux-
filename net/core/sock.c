@@ -142,11 +142,6 @@
 
 #include <net/tcp.h>
 #include <net/busy_poll.h>
-// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA {
-#include <linux/sched.h>
-#include <linux/pid.h>
-#include <net/ncm.h>
-// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
 
 static DEFINE_MUTEX(proto_list_mutex);
 static LIST_HEAD(proto_list);
@@ -622,94 +617,6 @@ out:
 
 	return ret;
 }
-// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA {
-/** The function sets the domain name associated with the socket. **/
-static int sock_set_domain_name(struct sock *sk, char __user *optval,
-				int optlen)
-{
-	int ret = -EADDRNOTAVAIL;
-	char domain[DOMAIN_NAME_LEN_NAP];
-
-	ret = -EINVAL;
-	if (optlen < 0)
-		goto out;
-
-	if (optlen > DOMAIN_NAME_LEN_NAP - 1)
-		optlen = DOMAIN_NAME_LEN_NAP - 1;
-
-	memset(domain, 0, sizeof(domain));
-
-	ret = -EFAULT;
-	if (copy_from_user(domain, optval, optlen))
-		goto out;
-	memcpy(sk->domain_name,domain, sizeof(sk->domain_name)-1);
-	ret = 0;
-
-out:
-	return ret;
-}
-
-/** The function sets the uid associated with the dns socket. **/
-static int sock_set_dns_uid(struct sock *sk, char __user *optval, int optlen)
-{
-	int ret = -EADDRNOTAVAIL;
-
-	if (optlen < 0)
-		goto out;
-
-	if (optlen == sizeof(uid_t)) {
-		uid_t dns_uid;
-		ret = -EFAULT;
-		if (copy_from_user(&dns_uid, optval, sizeof(dns_uid)))
-			goto out;
-		memcpy(&sk->knox_dns_uid, &dns_uid, sizeof(sk->knox_dns_uid));
-		ret = 0;
-    }
-
-out:
-	return ret;
-}
-
-/** The function sets the pid and the process name associated with the dns socket. **/
-static int sock_set_dns_pid(struct sock *sk, char __user *optval, int optlen)
-{
-	int ret = -EADDRNOTAVAIL;
-	struct pid *pid_struct = NULL;
-	struct task_struct *task = NULL;
-	int process_returnValue = -1;
-	char full_process_name[PROCESS_NAME_LEN_NAP] = {0};
-
-	if (optlen < 0)
-		goto out;
-
-	if (optlen == sizeof(pid_t)) {
-		pid_t dns_pid;
-		ret = -EFAULT;
-		if (copy_from_user(&dns_pid, optval, sizeof(dns_pid)))
-			goto out;
-		memcpy(&sk->knox_dns_pid, &dns_pid, sizeof(sk->knox_dns_pid));
-		if(check_ncm_flag()) {
-			pid_struct = find_get_pid(dns_pid);
-			if (pid_struct != NULL) {
-				task = pid_task(pid_struct,PIDTYPE_PID);
-				if (task != NULL) {
-					process_returnValue = get_cmdline(task, full_process_name, sizeof(full_process_name)-1);
-					if (process_returnValue > 0) {
-						memcpy(sk->dns_process_name, full_process_name, sizeof(sk->dns_process_name)-1);
-					} else {
-						memcpy(sk->dns_process_name, task->comm, sizeof(task->comm)-1);
-					}
-				}
-			}
-		}
-		ret = 0;
-	}
-
-out:
-	return ret;
-}
-
-// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
 
 static inline void sock_valbool_flag(struct sock *sk, int bit, int valbool)
 {
@@ -759,14 +666,6 @@ int sock_setsockopt(struct socket *sock, int level, int optname,
 
 	if (optname == SO_BINDTODEVICE)
 		return sock_setbindtodevice(sk, optval, optlen);
-	// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA {
-	if (optname == SO_SET_DOMAIN_NAME)
-		return sock_set_domain_name(sk, optval, optlen);
-	if (optname == SO_SET_DNS_UID)
-		return sock_set_dns_uid(sk, optval, optlen);
-	if (optname == SO_SET_DNS_PID)
-		return sock_set_dns_pid(sk, optval, optlen);
-	// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
 
 	if (optlen < sizeof(int))
 		return -EINVAL;
@@ -799,7 +698,6 @@ int sock_setsockopt(struct socket *sock, int level, int optname,
 		break;
 	case SO_DONTROUTE:
 		sock_valbool_flag(sk, SOCK_LOCALROUTE, valbool);
-		sk_dst_reset(sk);
 		break;
 	case SO_BROADCAST:
 		sock_valbool_flag(sk, SOCK_BROADCAST, valbool);
@@ -1106,7 +1004,7 @@ set_rcvbuf:
 		break;
 
 	case SO_INCOMING_CPU:
-		WRITE_ONCE(sk->sk_incoming_cpu, val);
+		sk->sk_incoming_cpu = val;
 		break;
 
 	case SO_CNX_ADVICE:
@@ -1442,12 +1340,15 @@ int sock_getsockopt(struct socket *sock, int level, int optname,
 		break;
 
 	case SO_INCOMING_CPU:
-		v.val = READ_ONCE(sk->sk_incoming_cpu);
+		v.val = sk->sk_incoming_cpu;
 		break;
 
 	case SO_MEMINFO:
 	{
 		u32 meminfo[SK_MEMINFO_VARS];
+
+		if (get_user(len, optlen))
+			return -EFAULT;
 
 		sk_get_meminfo(sk, meminfo);
 
@@ -1561,7 +1462,7 @@ static struct sock *sk_prot_alloc(struct proto *prot, gfp_t priority,
 		sk = kmem_cache_alloc(slab, priority & ~__GFP_ZERO);
 		if (!sk)
 			return sk;
-		if (want_init_on_alloc(priority))
+		if (priority & __GFP_ZERO)
 			sk_prot_clear_nulls(sk, prot->obj_size);
 	} else
 		sk = kmalloc(prot->obj_size, priority);
@@ -1617,63 +1518,10 @@ struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 		      struct proto *prot, int kern)
 {
 	struct sock *sk;
-	// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA {
-	struct pid *pid_struct = NULL;
-	struct task_struct *task = NULL;
-	int process_returnValue = -1;
-	char full_process_name[PROCESS_NAME_LEN_NAP] = {0};
-	struct pid *parent_pid_struct = NULL;
-	struct task_struct *parent_task = NULL;
-	int parent_returnValue = -1;
-	char full_parent_process_name[PROCESS_NAME_LEN_NAP] = {0};
-	// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
 
 	sk = sk_prot_alloc(prot, priority | __GFP_ZERO, family);
 	if (sk) {
 		sk->sk_family = family;
-		// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA {
-		/* assign values to members of sock structure when npa flag is present */
-		sk->knox_uid = current->cred->uid.val;
-		sk->knox_pid = current->tgid;
-		sk->knox_puid = 0;
-		sk->knox_ppid = 0;
-		sk->knox_dns_uid = 0;
-		sk->knox_dns_pid = 0;
-		memset(sk->process_name,'\0',sizeof(sk->process_name));
-		memset(sk->parent_process_name,'\0',sizeof(sk->parent_process_name));
-		memset(sk->dns_process_name,'\0',sizeof(sk->dns_process_name));
-		memset(sk->domain_name,'\0',sizeof(sk->domain_name));
-		if (check_ncm_flag()) {
-			pid_struct = find_get_pid(current->tgid);
-			if (pid_struct != NULL) {
-				task = pid_task(pid_struct, PIDTYPE_PID);
-				if (task != NULL) {
-					process_returnValue = get_cmdline(task, full_process_name, sizeof(full_process_name)-1);
-					if (process_returnValue > 0) {
-						memcpy(sk->process_name, full_process_name, sizeof(sk->process_name)-1);
-					} else {
-						memcpy(sk->process_name, task->comm, sizeof(task->comm)-1);
-					}
-					if (task->parent != NULL) {
-						parent_pid_struct = find_get_pid(task->parent->tgid);
-						if (parent_pid_struct != NULL) {
-							parent_task = pid_task(parent_pid_struct, PIDTYPE_PID);
-							if (parent_task != NULL) {
-								parent_returnValue = get_cmdline(parent_task, full_parent_process_name, sizeof(full_parent_process_name)-1);
-								if (parent_returnValue > 0) {
-									memcpy(sk->parent_process_name, full_parent_process_name, sizeof(sk->parent_process_name)-1);
-								} else {
-									memcpy(sk->parent_process_name, parent_task->comm, sizeof(parent_task->comm)-1);
-								}
-								sk->knox_puid = parent_task->cred->uid.val;
-								sk->knox_ppid = parent_task->tgid;
-							}
-						}
-					}
-				}
-			}
-		}
-		// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
 		/*
 		 * See comment in struct sock definition to understand
 		 * why we need sk_prot_creator -acme
@@ -1717,6 +1565,8 @@ static void __sk_destruct(struct rcu_head *head)
 		sk_filter_uncharge(sk, filter);
 		RCU_INIT_POINTER(sk->sk_filter, NULL);
 	}
+	if (rcu_access_pointer(sk->sk_reuseport_cb))
+		reuseport_detach_sock(sk);
 
 	sock_disable_timestamp(sk, SK_FLAGS_TIMESTAMP);
 
@@ -1739,14 +1589,7 @@ static void __sk_destruct(struct rcu_head *head)
 
 void sk_destruct(struct sock *sk)
 {
-	bool use_call_rcu = sock_flag(sk, SOCK_RCU_FREE);
-
-	if (rcu_access_pointer(sk->sk_reuseport_cb)) {
-		reuseport_detach_sock(sk);
-		use_call_rcu = true;
-	}
-
-	if (use_call_rcu)
+	if (sock_flag(sk, SOCK_RCU_FREE))
 		call_rcu(&sk->sk_rcu, __sk_destruct);
 	else
 		__sk_destruct(&sk->sk_rcu);
@@ -1843,10 +1686,7 @@ struct sock *sk_clone_lock(const struct sock *sk, const gfp_t priority)
 		atomic_set(&newsk->sk_zckey, 0);
 
 		sock_reset_flag(newsk, SOCK_DONE);
-
-		/* sk->sk_memcg will be populated at accept() time */
-		newsk->sk_memcg = NULL;
-
+		mem_cgroup_sk_alloc(newsk);
 		cgroup_sk_alloc(&newsk->sk_cgrp_data);
 
 		rcu_read_lock();
@@ -2336,8 +2176,8 @@ static void sk_leave_memory_pressure(struct sock *sk)
 	} else {
 		unsigned long *memory_pressure = sk->sk_prot->memory_pressure;
 
-		if (memory_pressure && READ_ONCE(*memory_pressure))
-			WRITE_ONCE(*memory_pressure, 0);
+		if (memory_pressure && *memory_pressure)
+			*memory_pressure = 0;
 	}
 }
 
@@ -2477,7 +2317,7 @@ static void __lock_sock(struct sock *sk)
 	finish_wait(&sk->sk_lock.wq, &wait);
 }
 
-void __release_sock(struct sock *sk)
+static void __release_sock(struct sock *sk)
 	__releases(&sk->sk_lock.slock)
 	__acquires(&sk->sk_lock.slock)
 {
@@ -2592,7 +2432,7 @@ int __sk_mem_raise_allocated(struct sock *sk, int size, int amt, int kind)
 	}
 
 	if (sk_has_memory_pressure(sk)) {
-		u64 alloc;
+		int alloc;
 
 		if (!sk_under_memory_pressure(sk))
 			return 1;
@@ -2963,9 +2803,6 @@ void sock_init_data(struct socket *sock, struct sock *sk)
 	sk->sk_sndtimeo		=	MAX_SCHEDULE_TIMEOUT;
 
 	sk->sk_stamp = SK_DEFAULT_STAMP;
-#if BITS_PER_LONG==32
-	seqlock_init(&sk->sk_stamp_seq);
-#endif
 	atomic_set(&sk->sk_zckey, 0);
 
 #ifdef CONFIG_NET_RX_BUSY_POLL
@@ -3065,13 +2902,12 @@ int sock_get_timestamp(struct sock *sk, struct timeval __user *userstamp)
 	struct timeval tv;
 
 	sock_enable_timestamp(sk, SOCK_TIMESTAMP);
-	tv = ktime_to_timeval(sock_read_timestamp(sk));
+	tv = ktime_to_timeval(sk->sk_stamp);
 	if (tv.tv_sec == -1)
 		return -ENOENT;
 	if (tv.tv_sec == 0) {
-		ktime_t kt = ktime_get_real();
-		sock_write_timestamp(sk, kt);
-		tv = ktime_to_timeval(kt);
+		sk->sk_stamp = ktime_get_real();
+		tv = ktime_to_timeval(sk->sk_stamp);
 	}
 	return copy_to_user(userstamp, &tv, sizeof(tv)) ? -EFAULT : 0;
 }
@@ -3082,12 +2918,11 @@ int sock_get_timestampns(struct sock *sk, struct timespec __user *userstamp)
 	struct timespec ts;
 
 	sock_enable_timestamp(sk, SOCK_TIMESTAMP);
-	ts = ktime_to_timespec(sock_read_timestamp(sk));
+	ts = ktime_to_timespec(sk->sk_stamp);
 	if (ts.tv_sec == -1)
 		return -ENOENT;
 	if (ts.tv_sec == 0) {
-		ktime_t kt = ktime_get_real();
-		sock_write_timestamp(sk, kt);
+		sk->sk_stamp = ktime_get_real();
 		ts = ktime_to_timespec(sk->sk_stamp);
 	}
 	return copy_to_user(userstamp, &ts, sizeof(ts)) ? -EFAULT : 0;
@@ -3504,7 +3339,6 @@ int sock_load_diag_module(int family, int protocol)
 
 #ifdef CONFIG_INET
 	if (family == AF_INET &&
-	    protocol != IPPROTO_RAW &&
 	    !rcu_access_pointer(inet_protos[protocol]))
 		return -ENOENT;
 #endif
@@ -3641,7 +3475,7 @@ bool sk_busy_loop_end(void *p, unsigned long start_time)
 {
 	struct sock *sk = p;
 
-	return !skb_queue_empty_lockless(&sk->sk_receive_queue) ||
+	return !skb_queue_empty(&sk->sk_receive_queue) ||
 	       sk_busy_loop_timeout(sk, start_time);
 }
 EXPORT_SYMBOL(sk_busy_loop_end);
