@@ -15,8 +15,6 @@
 # define __releases(x)	__attribute__((context(x,1,0)))
 # define __acquire(x)	__context__(x,1)
 # define __release(x)	__context__(x,-1)
-#ifndef __nocfi
-#define __nocfi
 # define __cond_lock(x,c)	((c) ? ({ __acquire(x); 1; }) : 0)
 # define __percpu	__attribute__((noderef, address_space(3)))
 # define __rcu		__attribute__((noderef, address_space(4)))
@@ -30,6 +28,9 @@ extern void __chk_io_ptr(const volatile void __iomem *);
 # else
 #  define __user
 # endif
+#ifndef __nocfi
+#define __nocfi
+#endif
 # define __kernel
 # define __safe
 # define __force
