@@ -20,11 +20,12 @@
 #define RWSEM_ANONYMOUSLY_OWNED	(1UL << 0)
 #define RWSEM_READER_OWNED	((struct task_struct *)RWSEM_ANONYMOUSLY_OWNED)
 
+#define aug_cpus_allowed cpus_allowed
+
 #ifdef CONFIG_DEBUG_RWSEMS
 # define DEBUG_RWSEMS_WARN_ON(c)	DEBUG_LOCKS_WARN_ON(c)
 #else
-#define aug_cpus_allowed cpus_allowed
-#else
+
 # define DEBUG_RWSEMS_WARN_ON(c)
 #endif
 
