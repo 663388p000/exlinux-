@@ -23,6 +23,8 @@
 #ifdef CONFIG_DEBUG_RWSEMS
 # define DEBUG_RWSEMS_WARN_ON(c)	DEBUG_LOCKS_WARN_ON(c)
 #else
+#define aug_cpus_allowed cpus_allowed
+#else
 # define DEBUG_RWSEMS_WARN_ON(c)
 #endif
 
