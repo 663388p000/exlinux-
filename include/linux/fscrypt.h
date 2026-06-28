@@ -33,7 +33,18 @@ struct fscrypt_name {
 	u32 minor_hash;
 	struct fscrypt_str crypto_buf;
 };
+/* include/linux/fscrypt.h یا compat header */
+#ifndef FS_KEY_DESCRIPTOR_SIZE
+#define FS_KEY_DESCRIPTOR_SIZE 8
+#endif
 
+#ifndef FS_MAX_KEY_SIZE
+#define FS_MAX_KEY_SIZE 64
+#endif
+
+#ifndef FS_KEY_DESC_PREFIX
+#define FS_KEY_DESC_PREFIX "fscrypt:"
+#endif
 #define FSTR_INIT(n, l)		{ .name = n, .len = l }
 #define FSTR_TO_QSTR(f)		QSTR_INIT((f)->name, (f)->len)
 #define fname_name(p)		((p)->disk_name.name)
