@@ -53,7 +53,8 @@ extern void __chk_io_ptr(const volatile void __iomem *);
 #define __PASTE(a,b) ___PASTE(a,b)
 
 #ifdef __KERNEL__
-
+#ifndef __nocfi
+#define __nocfi
 /* Compiler specific macros. */
 #ifdef __clang__
 #include <linux/compiler-clang.h>
