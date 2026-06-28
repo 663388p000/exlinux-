@@ -15,6 +15,8 @@
 # define __releases(x)	__attribute__((context(x,1,0)))
 # define __acquire(x)	__context__(x,1)
 # define __release(x)	__context__(x,-1)
+#ifndef __nocfi
+#define __nocfi
 # define __cond_lock(x,c)	((c) ? ({ __acquire(x); 1; }) : 0)
 # define __percpu	__attribute__((noderef, address_space(3)))
 # define __rcu		__attribute__((noderef, address_space(4)))
@@ -57,8 +59,6 @@ extern void __chk_io_ptr(const volatile void __iomem *);
 /* Compiler specific macros. */
 #ifdef __clang__
 #include <linux/compiler-clang.h>
-#ifndef __nocfi
-#define __nocfi
 #elif defined(__INTEL_COMPILER)
 #include <linux/compiler-intel.h>
 #elif defined(__GNUC__)
