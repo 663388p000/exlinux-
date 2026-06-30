@@ -265,7 +265,7 @@ static inline const struct cred *get_cred(const struct cred *cred)
 static inline void put_cred(const struct cred *_cred)
 {
 	struct cred *cred = (struct cred *) _cred;
-
+	unsigned char non_rcu;
 	validate_creds(cred);
 	if (atomic_dec_and_test(&(cred)->usage))
 		__put_cred(cred);
