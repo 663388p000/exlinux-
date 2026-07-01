@@ -274,7 +274,7 @@ int ili_wq_esd_spi_check(void)
 	ret = ilits->spi_write_then_read(ilits->spi, &tx, 1, &rx, 1);
 	ILI_DBG("%s spi esd check = 0x%x\n", __func__, ret);
 	if (ret == DO_SPI_RECOVER) {
-		input_err(true, ilits->dev, "%s ret = 0x%x\n", ret, __func__);
+		input_err(true, ilits->dev, "%s ret = 0x%x\n", __func__, ret);
 		return -1;
 	}
 	return 0;
