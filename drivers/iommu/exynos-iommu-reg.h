@@ -9,6 +9,7 @@
  */
 #include "exynos-iommu.h"
 #include <dt-bindings/sysmmu/sysmmu.h>
+#include <linux/samsung_debug_compat.h>
 #include <linux/sec_debug.h>
 
 #define is_secure_info_fail(x)	((((x) >> 16) & 0xffff) == 0xdead)
