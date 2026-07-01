@@ -1239,14 +1239,12 @@ int ili_tddi_init(void)
 	ilits->boot = true;
 #endif
 
-#if 1//LINUX_VERSION_CODE < KERNEL_VERSION(4, 9, 0)
-	ilits->ws = wakeup_source_register(ilits->dev, "ili_wakelock"); //4.19
-#else
-	ilits->ws = wakeup_source_register("ili_wakelock"); //4.9
-#endif
-	if (!ilits->ws)
-		input_err(true, ilits->dev, "%s wakeup source request failed\n", __func__);
+ilits->ws = wakeup_source_register("ili_wakelock");
 
+if (!ilits->ws)
+    input_err(true, ilits->dev,
+              "%s wakeup source request failed\n",
+              __func__);
 	return 0;
 }
 
