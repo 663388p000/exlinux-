@@ -21,6 +21,7 @@
  */
 #include "ili9881x_fw.h"
 #include "ili9881x.h"
+#include <linux/sec_input_compat.h>
 
 /* Debug level */
 bool debug_en = DEBUG_OUTPUT;
