@@ -33,7 +33,7 @@
  * TOTAL CUMULATIVE LIABILITY TO ANY PARTY SHALL NOT EXCEED ONE HUNDRED U.S.
  * DOLLARS.
  */
-
+#include <linux/sec_input.h>
 #include <linux/gpio.h>
 #include <linux/kthread.h>
 #include <linux/interrupt.h>
