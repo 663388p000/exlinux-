@@ -45,6 +45,7 @@
 #include "../../../pinctrl/core.h"
 #include <linux/power_supply.h>
 #include <linux/fs.h>
+#include <linux/sec_input_compat.h>
 #ifdef CONFIG_COMPAT
 #include <linux/compat.h>
 #endif
