@@ -381,8 +381,12 @@ int ili_proximity_far(int mode)
 	u8 cmd[2] = {0};
 
 	if (!ilits->prox_near) {
-		input_info(true, ilits->dev, "%s No proximity near event, break\n", __func__, __func__);
-		return 0;
+    input_info(true, ilits->dev,
+            "%s No proximity near event, break\n",
+            __func__);
+    return 0;
+	
+	
 	}
 
 	switch (mode) {
@@ -1388,9 +1392,12 @@ int ili_incell_power_control(int onoff)
 	int ret = 0;
 	static bool enabled;
 
-	input_info(true, ilits->dev, "%s onoff:%d, enabled:%d\n", __func__, onoff, enabled);
-	if (enabled == onoff)
-		return 0;
+	if (!ilits->prox_near) {
+    input_info(true, ilits->dev,
+            "%s No proximity near event, break\n",
+            __func__);
+    return 0;
+	}
 
 	if (!ilits->lcd_bl_en || !ilits->lcd_vddi || !ilits->lcd_rst) {
 		input_err(true, ilits->dev, "%s: not support incell power contorl\n", __func__, ret);
