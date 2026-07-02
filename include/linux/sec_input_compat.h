@@ -6,6 +6,7 @@
 #include <linux/device.h>
 #ifndef INPUT_FEATURE_ENABLE_SETTINGS_AOT
 #define INPUT_FEATURE_ENABLE_SETTINGS_AOT        (1 << 0)
+#define input_log_fix() do { } while (0)
 #endif
 
 #ifndef INPUT_FEATURE_ENABLE_SYSINPUT_ENABLED
