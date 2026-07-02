@@ -37,7 +37,7 @@
 #include <linux/input/mt.h>
 #include <linux/interrupt.h>
 #include "synaptics_tcm_core.h"
-
+#include <linux/sec_input_compat.h>
 #define TYPE_B_PROTOCOL
 
 #define USE_DEFAULT_TOUCH_REPORT_CONFIG
