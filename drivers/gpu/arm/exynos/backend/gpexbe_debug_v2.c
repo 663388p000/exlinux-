@@ -17,7 +17,11 @@
  * along with this program; if not, you can access it online at
  * http://www.gnu.org/licenses/gpl-2.0.html.
  */
-
+#include <linux/types.h>
+#include <linux/kernel.h>
+#include <linux/bug.h>
+#include <linux/stddef.h>
+#include <stdbool.h>
 #include <linux/debug-snapshot.h>
 
 #include <gpexbe_debug.h>
