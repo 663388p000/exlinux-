@@ -4,6 +4,17 @@
 #define __SEC_INPUT_COMPAT_H__
 
 #include <linux/device.h>
+#ifndef INPUT_FEATURE_ENABLE_SETTINGS_AOT
+#define INPUT_FEATURE_ENABLE_SETTINGS_AOT        (1 << 0)
+#endif
+
+#ifndef INPUT_FEATURE_ENABLE_SYSINPUT_ENABLED
+#define INPUT_FEATURE_ENABLE_SYSINPUT_ENABLED    (1 << 1)
+#endif
+
+#ifndef INPUT_FEATURE_ENABLE_PROX_LP_SCAN_ENABLED
+#define INPUT_FEATURE_ENABLE_PROX_LP_SCAN_ENABLED (1 << 2)
+#endif
 
 #ifndef input_err
 #define input_err(enable, dev, fmt, ...) \
