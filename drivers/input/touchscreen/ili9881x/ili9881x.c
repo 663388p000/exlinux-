@@ -527,13 +527,9 @@ int ili_sleep_handler(int mode)
 				input_err(true, ilits->dev, "%s Check busy timeout during suspend\n", __func__);
 		}
 		input_info(true, ilits->dev,
-    "%s prox_power_off:%ld, prox_face_mode:%d, gesture:%d, ges_sym:0x%x, incell_power_state:%d\n",
+    "%s ilits->power_status:%d\n",
     __func__,
-    ilits->prox_power_off,
-    ilits->prox_face_mode,
-    ilits->gesture,
-    ilits->ges_sym.value,
-    ilits->incell_power_state);
+    ilits->power_status);
 		if (ilits->prox_face_mode || ilits->gesture) {
 			ili_incell_power_control(ENABLE);
 			ilits->power_status = LP_AOT_STATUS;
