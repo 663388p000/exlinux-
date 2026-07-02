@@ -106,9 +106,7 @@ config MANDATORY_FILE_LOCKING
 
 	  To the best of my knowledge this is dead code that no one cares about.
 
-source "fs/crypto/Kconfig"
-
-source "fs/verity/Kconfig"
+source "fs/crypto/Kconfig""
 
 source "fs/notify/Kconfig"
 
