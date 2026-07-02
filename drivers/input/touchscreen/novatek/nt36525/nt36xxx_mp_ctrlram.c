@@ -19,7 +19,7 @@
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/slab.h>
-
+#include <linux/sec_input_compat.h>
 #include "nt36xxx.h"
 #include "nt36xxx_mp_ctrlram.h"
 
