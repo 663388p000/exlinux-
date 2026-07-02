@@ -10,6 +10,9 @@
  */
 
 #include <linux/input/sec_cmd.h>
+#ifndef SECLOG
+#define SECLOG ""
+#endif
 
 #if defined USE_SEC_CMD_QUEUE
 static void sec_cmd_store_function(struct sec_cmd_data *data);
