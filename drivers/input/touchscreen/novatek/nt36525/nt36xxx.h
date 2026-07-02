@@ -26,7 +26,7 @@
 #include <linux/input/sec_cmd.h>
 #include <linux/regulator/consumer.h>
 #include <linux/delay.h>
-
+#include <linux/sec_input_compat.h>
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
 #endif
