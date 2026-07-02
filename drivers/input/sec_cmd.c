@@ -378,7 +378,7 @@ static ssize_t sec_cmd_store(struct device *dev, struct device_attribute *devatt
 				snprintf(task_info, 40, "\n[%d:%s]", current->pid, current->comm);
 				sec_debug_tsp_command_history(task_info);
 				sec_debug_tsp_command_history(cmd.cmd);
-				sec_debug_tsp_command_history(tbuf);
+				
 
 			}
 			break;
