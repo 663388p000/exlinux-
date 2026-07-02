@@ -885,9 +885,14 @@ int ili_report_handler(void)
 		if (ret == DO_SPI_RECOVER) {
 			ili_ic_get_pc_counter(DO_SPI_RECOVER);
 
-			input_info(true, ilits->dev, "%s prox_power_off:%d, ilits->tp_suspend:%d, ilits->actual_tp_mode:%d, prox_face_mode:%d, gesture:%d,\n",
-				__func__, ilits->prox_power_off, ilits->tp_suspend, ilits->actual_tp_mode,
-				ilits->prox_face_mode, ilits->gesture);
+			input_info(true, ilits->dev,
+    "%s prox_power_off:%ld, ilits->tp_suspend:%d, ilits->actual_tp_mode:%d, prox_face_mode:%d, gesture:%d\n",
+          __func__,
+             ilits->prox_power_off,
+            ilits->tp_suspend,
+           ilits->actual_tp_mode,
+           ilits->prox_face_mode,
+           ilits->gesture);
 
 			if ((ilits->actual_tp_mode == P5_X_FW_GESTURE_MODE) &&
 					(ilits->gesture || ilits->prox_face_mode) && ilits->tp_suspend) {
