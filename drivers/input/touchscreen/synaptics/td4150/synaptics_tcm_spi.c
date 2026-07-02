@@ -37,7 +37,7 @@
 #include <linux/spi/spi.h>
 #include <linux/of_gpio.h>
 #include "synaptics_tcm_core.h"
-
+#include <linux/sec_input_compat.h>
 static unsigned char *buf;
 
 static unsigned int buf_size;
