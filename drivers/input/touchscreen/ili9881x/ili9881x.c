@@ -526,9 +526,14 @@ int ili_sleep_handler(int mode)
 			if (ili_ic_check_busy(50, 20) < 0)
 				input_err(true, ilits->dev, "%s Check busy timeout during suspend\n", __func__);
 		}
-		input_info(true, ilits->dev, "%s prox_power_off:%d, prox_face_mode:%d, gesture:%d, ges_sym:0x%x, incell_power_state:%d\n",
-				__func__, ilits->prox_power_off, ilits->prox_face_mode,
-				ilits->gesture, ilits->ges_sym, ilits->incell_power_state);
+		input_info(true, ilits->dev,
+    "%s prox_power_off:%ld, prox_face_mode:%d, gesture:%d, ges_sym:0x%x, incell_power_state:%d\n",
+    __func__,
+    ilits->prox_power_off,
+    ilits->prox_face_mode,
+    ilits->gesture,
+    ilits->ges_sym.value,
+    ilits->incell_power_state);
 		if (ilits->prox_face_mode || ilits->gesture) {
 			ili_incell_power_control(ENABLE);
 			ilits->power_status = LP_AOT_STATUS;
@@ -558,8 +563,6 @@ int ili_sleep_handler(int mode)
 		ilits->sleep_handler_mode = mode;
 		break;
 	case TP_EARLY_RESUME:
-		input_info(true, ilits->dev, "%s ilits->power_status:%d, ges_sym:0x%x\n",
-				__func__, ilits->power_status, ilits->ges_sym);
 		if ((ilits->power_status != POWER_OFF_STATUS) && (ilits->power_status != POWER_ON_STATUS)) {
 			ili_irq_wake_disable();
 			if (ilits->power_status == LP_PROX_STATUS) {
