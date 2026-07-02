@@ -39,7 +39,7 @@
 #include <linux/interrupt.h>
 #include <linux/regulator/consumer.h>
 #include "synaptics_tcm_core.h"
-
+#include <linux/sec_input_compat.h>
 /* #define RESET_ON_RESUME */
 
 /* #define RESUME_EARLY_UNBLANK */
