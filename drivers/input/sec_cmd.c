@@ -330,8 +330,6 @@ static void sec_cmd_store_function(struct sec_cmd_data *data)
 		snprintf(tbuf, sizeof(tbuf), "[r:%lu.%06lu]",
 				(unsigned long)t,
 				nanosec_rem / 1000);
-
-		sec_debug_tsp_command_history(tbuf);
 	}
 }
 
