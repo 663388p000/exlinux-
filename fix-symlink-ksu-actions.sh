@@ -11,4 +11,8 @@ case "$1" in
         ln -sf "$ROOT/root/nxtKSU/kernel" "$ROOT/drivers/kernelsu"
         exit
         ;;
+    "resukiKSU")
+        ln -sf "$ROOT/root/resukiKSU/kernel" "$ROOT/drivers/kernelsu"
+        exit
+        ;;
 esac

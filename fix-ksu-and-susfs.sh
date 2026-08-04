@@ -24,14 +24,18 @@ fi
 ROOTDIR="$(pwd)/root"
 
 # KernelSU
-RISSU_KSU="$ROOTDIR/rKSU"
+RISSU_KSU="$ROOTDIR/rKSU" # Note that RissuKSU has been Deprecated, but options still exist for now, as its still supported until 2026
 NXT_KSU="$ROOTDIR/nxtKSU"
+RESUKI_KSU="$ROOTDIR/resukiKSU" # This will Replace RissuKSU in the next coming updates
 
 # KernelSU-Rissu Symlink
 FROM_RKSU="$RISSU_KSU/kernel"
 
 # KernelSU-NXT Symlink
 FROM_NXTKSU="$NXT_KSU/kernel"
+
+# Resuki KernelSU
+FROM_RESUKI_KSU="$RESUKI_KSU/kernel"
 
 # Target Driver Link
 TARGET_SYMLINK="$(pwd)/drivers/kernelsu"
@@ -146,9 +150,10 @@ function fix_symlink_interactive() {
     SYML=$(dialog \
             --backtitle "Fix KSU Symlink" \
             --title "Fix KernelSU Symlinks" \
-            --menu "Fix/Set KernelSU Symlinks\n\nThis tool utilizes symlink fixing since not all hardware has the same path structure, or you just want to switch to the other KSU package. (So far, only we support KernelSU by Rissu and KernelSU Next)\n\nCurrent Symlink Status (Reported by symlink_driver_detect_probe):\n$SYMRESULT \n\nAlso after doing this, please check the drivers/Kconfig and drivers/Makefile and add/remove KernelSU as obj and Source\n\nIf the path shows <ROOT>/drivers/kernelsu, then that means its unlinked, and deleted, the realpath seems to be bugged and i am not sure why."  0 0 0 \
-            "Fix/Set KSU with RKSU" "Set/Fix Rissu's KernelSU" \
+            --menu "Fix/Set KernelSU Symlinks\n\nThis tool utilizes symlink fixing since not all hardware has the same path structure, or you just want to switch to the other KSU package. (So far, only we support KernelSU by Rissu and KernelSU Next)\n\nCurrent Symlink Status (Reported by symlink_driver_detect_probe):\n$SYMRESULT \n\nAlso after doing this, please check the drivers/Kconfig and drivers/Makefile and add/remove KernelSU as obj and Source\n\nIf the path shows <ROOT>/drivers/kernelsu, then that means its unlinked, and deleted, the realpath seems to be bugged and i am not sure why.\n\nNote: "*" indicates deprecated, but still functional until 2027"  0 0 0 \
+            "Fix/Set KSU with RKSU" "Set/Fix Rissu's KernelSU [*]" \
             "Fix/Set KSU with NXTKSU" "Set/Fix Rifsxd KernelSU"\
+            "Fix/Set KSU with ResukiKSU" "Set/Fix Resuki's KernelSU (Current Mainline Supported)"\
             "Reset Symlink" "Delete Symlink path" \
             2>&1 >/dev/tty);
         local extvar=$?
@@ -169,6 +174,13 @@ function fix_symlink_interactive() {
                 infobox "" "Rifsxd's KernelSU chosen"
                 sleep 2
                 fix_symlink "nxtKSU"
+                unset SYMRESULT
+                fix_symlink_interactive
+                ;;
+            "Fix/Set KSU with ResukiKSU")
+                infobox "" "Resuki's KernelSU chosen"
+                sleep 2
+                fix_symlink "resukiKSU"
                 unset SYMRESULT
                 fix_symlink_interactive
                 ;;
