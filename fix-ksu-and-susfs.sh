@@ -115,6 +115,8 @@ function fix_symlink() {
         KERNELSUROOT="$RISSU_KSU/kernel"
     elif [ "$1" == "nxtKSU" ]; then
         KERNELSUROOT="$NXT_KSU/kernel"
+    elif [ "$1" == "resukiKSU" ]; then
+        KERNELSUROOT="$RESUKI_KSU/kernel"
     else 
         echo "Empty parameter"
         sleep 5
