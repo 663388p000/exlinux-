@@ -32,11 +32,11 @@
  * 
 */
 
-#ifdef CONFIG_KSU_SUSFS
-// This variable is declared extern in susfs.c but defined in security/selinux/avc.c in 6.12-gki patch.
-// We define it here to satisfy the linker.
-bool susfs_is_avc_log_spoofing_enabled = false;
-#endif
+// #ifdef CONFIG_KSU_SUSFS
+// // This variable is declared extern in susfs.c but defined in security/selinux/avc.c in 6.12-gki patch.
+// // We define it here to satisfy the linker.
+// // bool susfs_is_avc_log_spoofing_enabled = false;
+// #endif
 
 /* fs/readdir.c
  *
@@ -45,42 +45,15 @@ bool susfs_is_avc_log_spoofing_enabled = false;
  * 
 */
 
-#ifdef CONFIG_KSU_SUSFS_SUS_PATH
+// #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 
-// We need access to the helper functions usually static in susfs.c
-// Since this header is included at the END of susfs.c, it can see them.
-// Note: These prototypes essentially just confirm availability to the compiler.
-extern bool is_i_uid_in_android_data_not_allowed(uid_t i_uid);
-extern bool is_i_uid_in_sdcard_not_allowed(void);
+// // We need access to the helper functions usually static in susfs.c
+// // Since this header is included at the END of susfs.c, it can see them.
+// // Note: These prototypes essentially just confirm availability to the compiler.
+// extern bool is_i_uid_in_android_data_not_allowed(uid_t i_uid);
+// extern bool is_i_uid_in_sdcard_not_allowed(void);
 
-int susfs_sus_ino_for_filldir64(unsigned long ino) {
-	struct st_susfs_sus_path_list *cursor = NULL;
-
-	// Check Android Data paths
-	list_for_each_entry(cursor, &LH_SUS_PATH_ANDROID_DATA, list) {
-		if (cursor->info.target_ino == ino && is_i_uid_in_android_data_not_allowed(cursor->info.i_uid)) {
-			return 1; // Hide this entry
-		}
-	}
-
-	// Check SDCard paths
-	list_for_each_entry(cursor, &LH_SUS_PATH_SDCARD, list) {
-		if (cursor->info.target_ino == ino && is_i_uid_in_sdcard_not_allowed()) {
-			return 1; // Hide this entry
-		}
-	}
-	
-	// Check Loop paths
-	list_for_each_entry(cursor, &LH_SUS_PATH_LOOP, list) {
-		if (cursor->info.target_ino == ino) {
-			 // Standard behavior is to hide these loop files
-			 return 1;
-		}
-	}
-
-	return 0; // Do not hide
-}
-#endif /* CONFIG_KSU_SUSFS_SUS_PATH */
+// #endif /* CONFIG_KSU_SUSFS_SUS_PATH */
 
 /* kernelsu/setuid_hook.c
  *

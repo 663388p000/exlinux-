@@ -11,7 +11,6 @@
 #include <linux/seqlock.h>
 #include <linux/stat.h>
 #include <linux/uaccess.h>
-#include <linux/version.h>
 #include <linux/fdtable.h>
 #include <linux/statfs.h>
 #include <linux/random.h>

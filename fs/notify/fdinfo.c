@@ -102,39 +102,45 @@ static void inotify_fdinfo(struct seq_file *m, struct fsnotify_mark *mark)
 	inode = igrab(fsnotify_conn_inode(mark->connector));
 	if (inode) {
 #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
-		if (likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC) &&
-				unlikely(inode->i_state & BIT_SUS_KSTAT)) {
+		struct mount *mnt = real_mount(file->f_path.mnt);
+		if (mnt->mnt_id >= DEFAULT_KSU_MNT_ID &&
+			likely(susfs_is_current_proc_umounted()))
+		{
 			struct path path;
 			char *pathname = kmalloc(PAGE_SIZE, GFP_KERNEL);
 			char *dpath;
 			if (!pathname) {
-				goto out_seq_printf;
+				goto orig_flow;
 			}
 			dpath = d_path(&file->f_path, pathname, PAGE_SIZE);
 			if (!dpath) {
-				goto out_free_pathname;
+				goto out_kfree;
 			}
 			if (kern_path(dpath, 0, &path)) {
-				goto out_free_pathname;
+				goto out_kfree;
 			}
-			u32 mask = mark->mask & IN_ALL_EVENTS;
+			if (!path.dentry->d_inode) {
+				goto out_path_put;
+			}
 			seq_printf(m, "inotify wd:%x ino:%lx sdev:%x mask:%x ignored_mask:%x ",
-			   inode_mark->wd, inode->i_ino, inode->i_sb->s_dev,
-			   mask, mark->ignored_mask);
+					inode_mark->wd, path.dentry->d_inode->i_ino, path.dentry->d_inode->i_sb->s_dev,
+					mark->mask, mark->ignored_mask);
 			show_mark_fhandle(m, path.dentry->d_inode);
 			seq_putc(m, '\n');
-			iput(inode);
 			path_put(&path);
 			kfree(pathname);
+			iput(inode);
 			return;
-out_free_pathname:
+out_path_put:
+			path_put(&path);
+out_kfree:
 			kfree(pathname);
 		}
-out_seq_printf:
+orig_flow:
 #endif
 		seq_printf(m, "inotify wd:%x ino:%lx sdev:%x mask:%x ignored_mask:%x ",
 					inode_mark->wd, inode->i_ino, inode->i_sb->s_dev,
-					mark, mark->ignored_mask);
+					mark->mask, mark->ignored_mask);
 	}
 }
 

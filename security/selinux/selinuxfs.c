@@ -41,6 +41,14 @@
 #include "security.h"
 #include "objsec.h"
 #include "conditional.h"
+#include "ima.h"
+
+#ifdef CONFIG_KSU_SUSFS
+extern struct page *fake_status;
+extern struct static_key_false fake_status_initialize_key;
+extern bool ksu_selinux_hide_running __read_mostly;
+extern void initialize_fake_status(void);
+#endif
 
 enum sel_inos {
 	SEL_ROOT_INO = 2,
@@ -238,6 +246,20 @@ static int sel_open_handle_status(struct inode *inode, struct file *filp)
 
 	if (!status)
 		return -ENOMEM;
+
+#ifdef CONFIG_KSU_SUSFS
+	if (static_branch_unlikely(&fake_status_initialize_key)) {
+		if (ksu_selinux_hide_running && current_uid().val >= 10000) {
+			if (!fake_status) {
+				initialize_fake_status();
+			}
+			if (fake_status) {
+				filp->private_data = fake_status;
+				return 0;
+			}
+		}
+	}
+#endif
 
 	filp->private_data = status;
 

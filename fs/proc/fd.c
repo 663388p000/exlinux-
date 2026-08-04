@@ -12,13 +12,17 @@
 #include <linux/fs.h>
 
 #include <linux/proc_fs.h>
-#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
+#if defined(CONFIG_KSU_SUSFS_SUS_MOUNT) || defined(CONFIG_KSU_SUSFS_OPEN_REDIRECT)
 #include <linux/susfs_def.h>
 #endif
 
 #include "../mount.h"
 #include "internal.h"
 #include "fd.h"
+
+#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
+extern int susfs_get_non_sus_mnt_id_from_mnt(struct mount *orig_mnt);
+#endif
 
 static int seq_show(struct seq_file *m, void *v)
 {
@@ -61,17 +65,51 @@ static int seq_show(struct seq_file *m, void *v)
 
 #ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
 	mnt = real_mount(file->f_path.mnt);
-	if (likely(current->susfs_task_state & TASK_STRUCT_NON_ROOT_USER_APP_PROC) &&
-			mnt->mnt_id >= DEFAULT_KSU_MNT_ID) {
-		for (; mnt->mnt_id >= DEFAULT_KSU_MNT_ID; mnt = mnt->mnt_parent) { }
+	if (mnt->mnt_id >= DEFAULT_KSU_MNT_ID &&
+		likely(susfs_is_current_proc_umounted()))
+	{
+		struct path path;
+		char *pathname = kmalloc(PAGE_SIZE, GFP_KERNEL);
+		char *dpath;
+
+		if (!pathname) {
+			goto orig_flow;
+		}
+		dpath = d_path(&file->f_path, pathname, PAGE_SIZE);
+		if (!dpath) {
+			goto out_kfree;
+		}
+		if (kern_path(dpath, 0, &path)) {
+			goto out_kfree;
+		}
+		if (!path.dentry->d_inode) {
+			goto out_path_put;
+		}
+
+		seq_printf(m, "pos:\t%lli\nflags:\t0%o\nmnt_id:\t%i\nino:\t%lu\n",
+				(long long)file->f_pos, f_flags,
+				susfs_get_non_sus_mnt_id_from_mnt(mnt),
+				path.dentry->d_inode->i_ino);
+		path_put(&path);
+		kfree(pathname);
+		goto bypass_orig_flow;
+out_path_put:
+		path_put(&path);
+out_kfree:
+		kfree(pathname);
+		goto orig_flow;
 	}
-	seq_printf(m, "pos:\t%lli\nflags:\t0%o\nmnt_id:\t%i\n",
+orig_flow:
+	seq_printf(m, "pos:\t%lli\nflags:\t0%o\nmnt_id:\t%i\nino:\t%lu\n",
 			(long long)file->f_pos, f_flags,
-			mnt->mnt_id);
+			real_mount(file->f_path.mnt)->mnt_id,
+			file_inode(file)->i_ino);
+bypass_orig_flow:
 #else
-	seq_printf(m, "pos:\t%lli\nflags:\t0%o\nmnt_id:\t%i\n",
+	seq_printf(m, "pos:\t%lli\nflags:\t0%o\nmnt_id:\t%i\nino:\t%lu\n",
 		   (long long)file->f_pos, f_flags,
-		   real_mount(file->f_path.mnt)->mnt_id);
+		   real_mount(file->f_path.mnt)->mnt_id,
+		   file_inode(file)->i_ino);
 #endif
 
 	show_fd_locks(m, file, files);
