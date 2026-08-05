@@ -314,9 +314,10 @@ DEFINE_MUTEX(system_transition_mutex);
  * 	IT SEEMS THAT THE FLAG PREVIOUS OF THE PATCH WAS DEPRECATED. YIKES
  * 
  */
-#ifdef CONFIG_KSU
-extern int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user **arg);
-#endif
+ // RKSU old code
+// #ifdef CONFIG_KSU
+// extern int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user **arg);
+// #endif
 
 /*
  * Reboot system call: for obvious reasons only root may call it,
@@ -339,12 +340,13 @@ SYSCALL_DEFINE4(reboot, int, magic1, int, magic2, unsigned int, cmd,
 	char buffer[256];
 	int ret = 0;
 
-	#ifdef CONFIG_KSU
-    /* Note: We pass &arg (address of arg) because ksu_handle_sys_reboot 
-       expects "void __user **" and dereferences it.
-    */
-    ksu_handle_sys_reboot(magic1, magic2, cmd, (void __user **)&arg);
-    #endif
+	// rksu old code
+	// #ifdef CONFIG_KSU
+    // /* Note: We pass &arg (address of arg) because ksu_handle_sys_reboot 
+    //    expects "void __user **" and dereferences it.
+    // */
+    // ksu_handle_sys_reboot(magic1, magic2, cmd, (void __user **)&arg);
+    // #endif
 
 	// reboot.c ReSukiSU Manual Hook
 	#ifdef CONFIG_KSU_MANUAL_HOOK

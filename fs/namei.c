@@ -1544,10 +1544,10 @@ static int follow_dotdot_rcu(struct nameidata *nd)
 			break;
 #ifdef CONFIG_KDP_NS
 		nd->path.mnt = mounted->mnt;
-		nd->path.dentry = mounted->mnt->mnt_root;
+		nd->path.dentry = mounted->mnt.mnt_root;
 #else
 		nd->path.mnt = &mounted->mnt;
-		nd->path.dentry = mounted->mnt->mnt_root;
+		nd->path.dentry = mounted->mnt.mnt_root;
 #endif
 		inode = nd->path.dentry->d_inode;
 		nd->seq = read_seqcount_begin(&nd->path.dentry->d_seq);
@@ -3821,6 +3821,22 @@ static struct file *path_openat(struct nameidata *nd,
 	return ERR_PTR(error);
 }
 
+struct file *do_filp_open(int dfd, struct filename *pathname,
+		const struct open_flags *op)
+{
+	struct nameidata nd;
+	int flags = op->lookup_flags;
+	struct file *filp;
+#ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT
+	struct filename *fake_pathname;
+#endif
+
+	set_nameidata(&nd, dfd, pathname);
+	filp = path_openat(&nd, op, flags | LOOKUP_RCU);
+	if (unlikely(filp == ERR_PTR(-ECHILD)))
+		filp = path_openat(&nd, op, flags);
+	if (unlikely(filp == ERR_PTR(-ESTALE)))
+		filp = path_openat(&nd, op, flags | LOOKUP_REVAL);
 #ifdef CONFIG_KSU_SUSFS_OPEN_REDIRECT
 	if (!IS_ERR(filp) && SUSFS_IS_INODE_OPEN_REDIRECT(filp->f_inode)) {
 		fake_pathname = susfs_open_redirect_spoof_do_sys_openat(filp->f_inode);

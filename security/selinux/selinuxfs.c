@@ -41,7 +41,8 @@
 #include "security.h"
 #include "objsec.h"
 #include "conditional.h"
-#include "ima.h"
+// Theres no Ima in 4.19 i just fking realized lmao
+// #include "ima.h"
 
 #ifdef CONFIG_KSU_SUSFS
 extern struct page *fake_status;
@@ -833,7 +834,7 @@ ssize_t (*const write_op[])(struct file *, char *, size_t) = {
 	[SEL_USER] = sel_write_user,
 	[SEL_MEMBER] = sel_write_member,
 	[SEL_CONTEXT] = sel_write_context,
-}
+};
 #endif
 //
 
