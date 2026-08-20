@@ -25,6 +25,7 @@ if [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
     echo "   THIN    --lto=thin"
     echo "   NONE    --lto=null"
     echo "LLD"
+    
     echo "   LLD ON  --lld=on"
     echo "   LLD OFF --lld=off"
     echo "Not arg with LLD, disables LLD by default"
