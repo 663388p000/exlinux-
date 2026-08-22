@@ -177,6 +177,8 @@ void decon_dump(struct decon_device *decon, bool panel_dump)
 	if (IS_DECON_OFF_STATE(decon)) {
 		decon_info("%s: DECON%d is disabled, state(%d)\n",
 				__func__, decon->id, decon->state);
+				if (acquired)
+			console_unlock();
 		return;
 	}
 
@@ -1529,8 +1531,16 @@ static unsigned int decon_map_ion_handle(struct decon_device *decon,
 	return dma->dma_buf->size;
 
 err_iovmm_map:
+if (!IS_ERR_OR_NULL(dma->attachment) && !IS_ERR_OR_NULL(dma->sg_table))
+		dma_buf_unmap_attachment(dma->attachment, dma->sg_table,
+				DMA_TO_DEVICE);
 err_buf_map_attachment:
+if (!IS_ERR_OR_NULL(dma->attachment))
+		dma_buf_detach(dma->dma_buf, dma->attachment);
 err_buf_map_attach:
+if (dma->dma_buf)
+		dma_buf_put(dma->dma_buf);
+	dma->dma_buf = NULL;
 	return 0;
 }
 
@@ -1797,11 +1807,26 @@ static int decon_set_dpp_config(struct decon_device *decon,
 	struct decon_win *win;
 	struct dpp_config dpp_config;
 	unsigned long aclk_khz;
+	static DEFINE_SPINLOCK(dpu_aclk_cache_lock);
+	static unsigned long dpu_aclk_cache_khz;
+	static ktime_t dpu_aclk_cache_time;
+	ktime_t dpu_aclk_now = ktime_get();
 
 	/* 1 msec */
-	aclk_khz = v4l2_subdev_call(decon->out_sd[0], core, ioctl,
-			EXYNOS_DPU_GET_ACLK, NULL) / 1000U;
-
+	spin_lock(&dpu_aclk_cache_lock);
+	if (dpu_aclk_cache_time &&
+			ktime_ms_delta(dpu_aclk_now, dpu_aclk_cache_time) < 100) {
+		aclk_khz = dpu_aclk_cache_khz;
+		spin_unlock(&dpu_aclk_cache_lock);
+	} else {
+		spin_unlock(&dpu_aclk_cache_lock);
+		aclk_khz = v4l2_subdev_call(decon->out_sd[0], core, ioctl,
+				EXYNOS_DPU_GET_ACLK, NULL) / 1000U;
+		spin_lock(&dpu_aclk_cache_lock);
+		dpu_aclk_cache_khz = aclk_khz;
+		dpu_aclk_cache_time = dpu_aclk_now;
+		spin_unlock(&dpu_aclk_cache_lock);
+	}
 	for (i = 0; i < decon->dt.max_win; i++) {
 		win = decon->win[i];
 		/*
@@ -2232,9 +2257,13 @@ static int decon_set_hdr_info(struct decon_device *decon,
 		decon_err("hdr metadata address is NULL\n");
 		return -EINVAL;
 	}
+	dma_buf_begin_cpu_access(regs->dma_buf_data[win_num][mp_idx].dma_buf,
+			DMA_FROM_DEVICE);
 	video_meta = (struct exynos_video_meta *)dma_buf_vmap(
 			regs->dma_buf_data[win_num][mp_idx].dma_buf);
 	if (IS_ERR_OR_NULL(video_meta)) {
+		dma_buf_end_cpu_access(regs->dma_buf_data[win_num][mp_idx].dma_buf,
+				DMA_FROM_DEVICE);
 		decon_err("Failed to get virtual address (err %pK)\n", video_meta);
 		return -ENOMEM;
 	}
@@ -2261,6 +2290,8 @@ static int decon_set_hdr_info(struct decon_device *decon,
 			&video_meta->shdr_static_info,
 			sizeof(struct exynos_hdr_static_info));
 	dma_buf_vunmap(regs->dma_buf_data[win_num][mp_idx].dma_buf, video_meta);
+	dma_buf_end_cpu_access(regs->dma_buf_data[win_num][mp_idx].dma_buf,
+			DMA_FROM_DEVICE);
 
 	return 0;
 
@@ -2273,6 +2304,8 @@ err_hdr_io:
 	decon_err("hdr metadata info subdev call is failed\n");
 
 	dma_buf_vunmap(regs->dma_buf_data[win_num][mp_idx].dma_buf, video_meta);
+	dma_buf_end_cpu_access(regs->dma_buf_data[win_num][mp_idx].dma_buf,
+			DMA_FROM_DEVICE);
 
 	return -EFAULT;
 }
@@ -2542,12 +2575,13 @@ static void decon_update_regs(struct decon_device *decon,
 			BUG();
 		}
 		DPU_DEBUG_DMA_BUF("frame_start\n");
-		for (i = 0; i < decon->dt.max_win; i++) {
-			if (regs->win_regs[i].wincon & WIN_EN_F(i)) {
-				for (j = 0; j < MAX_PLANE_CNT; j++) {
-					if (regs->dma_buf_data[i][j].dma_buf)
-						DPU_DEBUG_DMA_BUF("dma_buf_%d[%p]\n",
-								i, regs->dma_buf_data[i][j].dma_buf);
+		if (unlikely(dpu_dma_buf_log_level >= 7)) {
+			for (i = 0; i < decon->dt.max_win; i++) {
+				if (regs->win_regs[i].wincon & WIN_EN_F(i)) {
+					for (j = 0; j < MAX_PLANE_CNT; j++) {
+						if (regs->dma_buf_data[i][j].dma_buf)
+							DPU_DEBUG_DMA_BUF("dma_buf_%d[%p]\n",
+									i, regs->dma_buf_data[i][j].dma_buf);
 				}
 			}
 		}
