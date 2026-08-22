@@ -38,3 +38,13 @@ static const u32 runnable_avg_yN_inv[] = {
 #define LOAD_AVG_MAX 12337
 
 #endif
+#ifdef CONFIG_PELT_UTIL_HALFLIFE_6
+static const u32 runnable_avg_yN_inv[] = {
+	0xffffffff, 0xe45a1fdb, 0xcafc6e3d,
+	0xb504f333, 0xa0f7a2b0, 0x8f9d5b6d,
+};
+
+#define LOAD_AVG_PERIOD 6
+#define LOAD_AVG_MAX 9377
+
+#endif
