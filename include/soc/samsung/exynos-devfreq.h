@@ -25,8 +25,13 @@
 #define SET_CONST			1
 #define RELEASE				2
 
-/* DEVFREQ GOV TYPE */
-#define SIMPLE_INTERACTIVE 0
+/* DEVFREQ GOV TYPE
+ * This driver now always drives devfreq through the generic
+ * "simple_ondemand" governor. SIMPLE_ONDEMAND is kept only so the
+ * "governor" DT property still parses/logs a known value; it no
+ * longer selects between two different governors.
+ */
+#define SIMPLE_ONDEMAND 0
 
 struct exynos_devfreq_opp_table {
 	u32 idx;
@@ -67,9 +72,8 @@ struct exynos_devfreq_data {
 	const char				*governor_name;
 	u32					cal_qos_max;
 	void					*governor_data;
-#if IS_ENABLED(CONFIG_DEVFREQ_GOV_SIMPLE_INTERACTIVE)
-	struct devfreq_simple_interactive_data	simple_interactive_data;
-#endif
+	struct devfreq_simple_ondemand_data	simple_ondemand_data;
+
 	u32					dfs_id;
 	s32					old_idx;
 	s32					new_idx;
