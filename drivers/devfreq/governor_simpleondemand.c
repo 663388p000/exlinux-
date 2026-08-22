@@ -14,7 +14,6 @@
 #include <linux/devfreq.h>
 #include <linux/math64.h>
 #include <linux/pm_qos.h>
-#include <linux/module.h>
 #include <linux/slab.h>
 
 #include "governor.h"
@@ -159,13 +158,9 @@ static int devfreq_simple_ondemand_register_notifier(struct devfreq *df)
 
 	ret = pm_qos_add_notifier(data->pm_qos_class, &data->nb.nb);
 	if (ret < 0)
-		goto err;
+		return ret;
 
 	return 0;
-err:
-	kfree((void *)&data->nb.nb);
-
-	return ret;
 }
 
 static int devfreq_simple_ondemand_unregister_notifier(struct devfreq *df)
