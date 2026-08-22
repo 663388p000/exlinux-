@@ -680,7 +680,7 @@ menu "FAIR Scheuler tunables"
 
 choice
 	prompt "Utilization's PELT half-Life"
-	default PELT_UTIL_HALFLIFE_16
+	default PELT_UTIL_HALFLIFE_6
 	help
 	  Allows choosing one of the possible values for the PELT half-life to
 	  be used for the update of the utilization of tasks and CPUs.
@@ -698,6 +698,9 @@ config PELT_UTIL_HALFLIFE_16
 
 config PELT_UTIL_HALFLIFE_8
 	bool "8 ms, very fast"
+
+config PELT_UTIL_HALFLIFE_8
+	bool "6 ms, very fast"
 
 endchoice
 
