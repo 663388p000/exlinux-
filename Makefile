@@ -369,15 +369,15 @@ KBUILD_HOSTLDFLAGS  := $(HOST_LFS_LDFLAGS) $(HOSTLDFLAGS)
 KBUILD_HOSTLDLIBS   := $(HOST_LFS_LIBS) $(HOSTLDLIBS)
 
 # Make variables (CC, etc...)
-AS		= $(CROSS_COMPILE)as
-LD		= $(CROSS_COMPILE)ld
+AS		=$(srctree)/toolchain/clang-r416183b/bin/llvm-as
+LD		=$(srctree)/toolchain/clang-r416183b/bin/ld.lld
 CC      = $(srctree)/toolchain/clang-r416183b/bin/clang
 CPP		= $(CC) -E
-AR		= $(CROSS_COMPILE)ar
-NM		= $(CROSS_COMPILE)nm
-STRIP		= $(CROSS_COMPILE)strip
-OBJCOPY		= $(CROSS_COMPILE)objcopy
-OBJDUMP		= $(CROSS_COMPILE)objdump
+AR		= $(srctree)/toolchain/clang-r416183b/bin/llvm-ar
+NM		= $(srctree)/toolchain/clang-r416183b/bin/llvm-nm
+STRIP		= $(srctree)/toolchain/clang-r416183b/bin/llvm-strip
+OBJCOPY		= $(srctree)/toolchain/clang-r416183b/bin/llvm-objcopy
+OBJDUMP		= $(srctree)/toolchain/clang-r416183b/bin/llvm-objdump
 LEX		= flex
 YACC		= bison
 AWK		= awk
