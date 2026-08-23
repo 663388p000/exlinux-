@@ -18,4 +18,4 @@ ln -sf "$PWD/root/rKSU/kernel" "$PWD/drivers/kernelsu"
     
 
 make -j64 KCFLAGS=-w CONFIG_SECTION_MISMATCH_WARN_ONLY=y ARCH=arm64 exlinux_defconfig 
-make -j64 KCFLAGS=-w CONFIG_SECTION_MISMATCH_WARN_ONLY=y ARCH=arm64 
+make -j64 KCFLAGS=-w CONFIG_SECTION_MISMATCH_WARN_ONLY=y ARCH=arm64 AS=/toolchain/clang-r416183b/bin/llvm-as
