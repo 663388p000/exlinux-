@@ -4,6 +4,7 @@
 git submodule update --init root/rKSU
 git submodule update --init root/susfs
 git submodule update --init toolchain/clang-r416183b
+git submodule update --init toolchain/CC-4.9
 
 export LLVM=1
 export LLVM_IAS=1
