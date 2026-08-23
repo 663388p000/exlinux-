@@ -14,10 +14,8 @@ export LTO=full
 export LD=ld.lld
     
     
-ln -sf "$ROOT/root/rKSU/kernel" "$ROOT/drivers/kernelsu"
-
-
+ln -sf "$PWD/root/rKSU/kernel" "$PWD/drivers/kernelsu"
     
-    make clean && make mrproper
-    make -j64 KCFLAGS=-w CONFIG_SECTION_MISMATCH_WARN_ONLY=y ARCH=arm64 exlinux_defconfig 
-    make -j64 KCFLAGS=-w CONFIG_SECTION_MISMATCH_WARN_ONLY=y ARCH=arm64 
+
+make -j64 KCFLAGS=-w CONFIG_SECTION_MISMATCH_WARN_ONLY=y ARCH=arm64 exlinux_defconfig 
+make -j64 KCFLAGS=-w CONFIG_SECTION_MISMATCH_WARN_ONLY=y ARCH=arm64 
