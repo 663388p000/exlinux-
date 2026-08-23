@@ -1,7 +1,9 @@
 #!/bin/bash
 
 
-git submodule update --init --recursive
+git submodule update --init root/rKSU
+git submodule update --init root/susfs
+git submodule update --init toolchain/clang-r416183b
 
 export LLVM=1
 export LLVM_IAS=1
