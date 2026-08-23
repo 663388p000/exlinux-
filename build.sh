@@ -12,9 +12,6 @@
     export LD=ld.lld
     
     
-    git submodule update --init root/rKSU
-    git submodule update --init root/susfs
-    git submodule update --init toolchain/clang-r416183b
     ln -sf "$ROOT/root/rKSU/kernel" "$ROOT/drivers/kernelsu"
 
 
