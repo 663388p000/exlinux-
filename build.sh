@@ -1,18 +1,18 @@
 #!/bin/bash
 
 
+git submodule update --init --recursive
 
-
-    export LLVM=1
-    export LLVM_IAS=1
-    export PLATFORM_VERSION=13
-    export ANDROID_MAJOR_VERSION=t
-    export ARCH=arm64
-    export LTO=full
-    export LD=ld.lld
+export LLVM=1
+export LLVM_IAS=1
+export PLATFORM_VERSION=13
+export ANDROID_MAJOR_VERSION=t
+export ARCH=arm64
+export LTO=full
+export LD=ld.lld
     
     
-    ln -sf "$ROOT/root/rKSU/kernel" "$ROOT/drivers/kernelsu"
+ln -sf "$ROOT/root/rKSU/kernel" "$ROOT/drivers/kernelsu"
 
 
     
