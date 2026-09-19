@@ -52,32 +52,6 @@ static struct exynos_devfreq_data **devfreq_data;
 static u32 freq_array[6];
 static u32 boot_array[2];
 
-#ifdef CONFIG_EXYNOS_ALT_DVFS
-static struct srcu_notifier_head exynos_alt_notifier;
-
-void exynos_alt_call_chain(void)
-{
-	srcu_notifier_call_chain(&exynos_alt_notifier, 0, NULL);
-}
-
-static int exynos_alt_register_notifier(struct notifier_block *nb)
-{
-	return srcu_notifier_chain_register(&exynos_alt_notifier, nb);
-}
-
-static int exynos_alt_unregister_notifier(struct notifier_block *nb)
-{
-	return srcu_notifier_chain_unregister(&exynos_alt_notifier, nb);
-}
-
-static int __init init_alt_notifier_list(void)
-{
-	srcu_init_notifier_head(&exynos_alt_notifier);
-	return 0;
-}
-pure_initcall(init_alt_notifier_list);
-
-#endif
 #ifdef CONFIG_EXYNOS_DVFS_MANAGER
 static unsigned int ect_find_constraint_freq(struct ect_minlock_domain *ect_domain,
 					unsigned int freq)
@@ -1065,10 +1039,6 @@ static int exynos_devfreq_parse_dt(struct device_node *np, struct exynos_devfreq
 				 &data->simple_ondemand_data.downdifferential))
 		data->simple_ondemand_data.downdifferential = 0; /* use governor default */
 
-	if (of_property_read_u32(np, "multiplication_weight",
-				 &data->simple_ondemand_data.multiplication_weight))
-		data->simple_ondemand_data.multiplication_weight = 0; /* use governor default */
-
 	if (data->use_get_dev) {
 		/* Register um_data and um_list for tracing load */
 		int i;
@@ -1507,13 +1477,8 @@ static int exynos_devfreq_probe(struct platform_device *pdev)
 	pm_qos_add_request(&data->boot_pm_qos, (int)data->pm_qos_class,
 			   data->devfreq_profile.initial_freq);
 
-	if (data->use_get_dev) {
-		ret = exynos_devfreq_um_init(data);
-		if (ret) {
-			dev_err(data->dev, "failed register um\n");
-			goto err_um;
-		}
-	}
+	if (data->use_get_dev)
+		exynos_devfreq_um_init(data);
 
 	ret = devfreq_register_opp_notifier(data->dev, data->devfreq);
 	if (ret) {
@@ -1563,7 +1528,6 @@ err_reboot_noti:
 err_opp_noti:
 	if (data->use_get_dev)
 		exynos_devfreq_um_exit(data);
-err_um:
 	pm_qos_remove_request(&data->boot_pm_qos);
 	pm_qos_remove_request(&data->default_pm_qos_min);
 	if (data->pm_qos_class_max)
