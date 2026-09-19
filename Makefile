@@ -361,8 +361,6 @@ HOST_LFS_LIBS := $(shell getconf LFS_LIBS 2>/dev/null)
 
 HOSTCC       = gcc
 HOSTCXX      = g++
-
-
 KBUILD_HOSTCFLAGS   := -Wall -Wmissing-prototypes -Wstrict-prototypes -O2 \
 		-fomit-frame-pointer -std=gnu89 $(HOST_LFS_CFLAGS) \
 		$(HOSTCFLAGS)
@@ -371,15 +369,15 @@ KBUILD_HOSTLDFLAGS  := $(HOST_LFS_LDFLAGS) $(HOSTLDFLAGS)
 KBUILD_HOSTLDLIBS   := $(HOST_LFS_LIBS) $(HOSTLDLIBS)
 
 # Make variables (CC, etc...)
-AS		=$(srctree)/toolchain/CC-4.9/aarch64-linux-android/bin/as
-LD		=$(srctree)/toolchain/clang-r416183b/bin/ld.lld
+AS		= $(CROSS_COMPILE)as
+LD		= $(CROSS_COMPILE)ld
 CC      = $(srctree)/toolchain/clang-r416183b/bin/clang
 CPP		= $(CC) -E
-AR		= $(srctree)/toolchain/CC-4.9/aarch64-linux-android/bin/ar
-NM		= $(srctree)/toolchain/clang-r416183b/bin/llvm-nm
-STRIP		= $(srctree)/toolchain/clang-r416183b/bin/llvm-strip
-OBJCOPY		= $(srctree)/toolchain/clang-r416183b/bin/llvm-objcopy
-OBJDUMP		= $(srctree)/toolchain/clang-r416183b/bin/llvm-objdump
+AR		= $(CROSS_COMPILE)ar
+NM		= $(CROSS_COMPILE)nm
+STRIP		= $(CROSS_COMPILE)strip
+OBJCOPY		= $(CROSS_COMPILE)objcopy
+OBJDUMP		= $(CROSS_COMPILE)objdump
 LEX		= flex
 YACC		= bison
 AWK		= awk
