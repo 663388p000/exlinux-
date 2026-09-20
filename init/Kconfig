@@ -699,8 +699,8 @@ config PELT_UTIL_HALFLIFE_16
 config PELT_UTIL_HALFLIFE_8
 	bool "8 ms, very fast"
 
-config PELT_UTIL_HALFLIFE_8
-	bool "6 ms, very fast"
+config PELT_UTIL_HALFLIFE_6
+	bool "6 ms, very very fast"
 
 endchoice
 
