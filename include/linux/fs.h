@@ -2601,6 +2601,13 @@ extern int finish_no_open(struct file *file, struct dentry *dentry);
 
 extern int ioctl_preallocate(struct file *filp, void __user *argp);
 
+#ifdef CONFIG_COMPAT
+extern long compat_ptr_ioctl(struct file *file, unsigned int cmd,
+			     unsigned long arg);
+#else
+#define compat_ptr_ioctl NULL
+#endif
+
 /* fs/dcache.c */
 extern void __init vfs_caches_init_early(void);
 extern void __init vfs_caches_init(void);
