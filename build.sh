@@ -11,7 +11,6 @@ export LLVM_IAS=1
 export PLATFORM_VERSION=13
 export ANDROID_MAJOR_VERSION=t
 export ARCH=arm64
-export LTO=full
 export LD=ld.lld
     
     
