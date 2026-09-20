@@ -534,6 +534,11 @@ config UID_SYS_STATS_DEBUG
 	help
 	  Per TASK based io statistics exported to /proc/uid_io
 
+config NTSYNC
+	tristate "NT synchronization primitive emulation"
+	  To compile this driver as a module, choose M here: the
+	  module will be called ntsync
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"
