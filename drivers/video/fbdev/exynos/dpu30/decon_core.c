@@ -703,6 +703,8 @@ static int decon_enable(struct decon_device *decon)
 	enum decon_state prev_state = decon->state;
 	enum decon_state next_state = DECON_STATE_ON;
 
+	memset(fmt_info_cache_valid, 0, sizeof(fmt_info_cache_valid));
+
 	mutex_lock(&decon->lock);
 	if (decon->state == next_state) {
 		decon_warn("decon-%d %s already %s state\n", decon->id,
@@ -1960,6 +1962,7 @@ static int __decon_update_regs(struct decon_device *decon, struct decon_reg_data
 	}
 
 	decon_reg_all_win_shadow_update_req(decon->id);
+	decon_to_psr_info(decon, &psr);
 
 #ifdef CONFIG_SUPPORT_INDISPLAY
 	decon_set_indisplay_pre(decon, regs);
