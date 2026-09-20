@@ -164,6 +164,17 @@ config SGI_IOC4
 	  If you have an SGI Altix with an IOC4-based card say Y.
 	  Otherwise say N.
 
+config NTSYNC
+	tristate "NT synchronization primitive emulation"
+	help
+	  This module provides kernel support for emulation of Windows NT
+	  synchronization primitives. It is not a hardware driver.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called ntsync.
+
+	  If unsure, say N.
+
 config TIFM_CORE
 	tristate "TI Flash Media interface support"
 	depends on PCI
@@ -533,6 +544,8 @@ config UID_SYS_STATS_DEBUG
 	default n
 	help
 	  Per TASK based io statistics exported to /proc/uid_io
+
+
 
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
