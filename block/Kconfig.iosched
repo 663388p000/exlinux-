@@ -51,6 +51,9 @@ choice
 	config DEFAULT_DEADLINE
 		bool "Deadline" if IOSCHED_DEADLINE=y
 
+    config DEFAULT_BFQ
+        bool "BFQ" if IOSCHED_BFQ=y
+
 	config DEFAULT_CFQ
 		bool "CFQ" if IOSCHED_CFQ=y
 
