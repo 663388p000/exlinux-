@@ -668,27 +668,6 @@ int _decon_enable(struct decon_device *decon, enum decon_state state)
 
 	decon_to_psr_info(decon, &psr);
 
-#if 0
-	if ((decon->dt.out_type == DECON_OUT_DSI) && (state != DECON_STATE_DOZE)) {
-		if (psr.trig_mode == DECON_HW_TRIG) {
-			decon_set_black_window(decon);
-			/*
-			 * Blender configuration must be set before DECON start.
-			 * If DECON goes to start without window and
-			 * blender configuration,
-			 * DECON will go into abnormal state.
-			 * DECON2(for DISPLAYPORT) start in winconfig
-			 */
-			decon_reg_start(decon->id, &psr);
-		}
-	}
-
-	/*
-	 * After turned on LCD, previous update region must be set as FULL size.
-	 * DECON, DSIM and Panel are initialized as FULL size during UNBLANK
-	 */
-	DPU_FULL_RECT(&decon->win_up.prev_up_region, decon->lcd_info);
-#else
 	if (decon->dt.out_type == DECON_OUT_DSI && decon->state == DECON_STATE_OFF) {
 		decon_set_black_window(decon);
 		decon_reg_start(decon->id, &psr);
@@ -699,7 +678,6 @@ int _decon_enable(struct decon_device *decon, enum decon_state state)
 		*/
 		DPU_FULL_RECT(&decon->win_up.prev_up_region, decon->lcd_info);
 	}
-#endif
 
 	if (!decon->id && !decon->eint_status) {
 		enable_irq(decon->res.irq);
@@ -810,52 +788,63 @@ int cmu_dpu_dump(void)
 	cmu_regs = ioremap(0x12800100, 0x10);
 	print_hex_dump(KERN_ERR, "", DUMP_PREFIX_ADDRESS, 32, 4,
 			cmu_regs, 0x0C, false);
+	iounmap(cmu_regs);
 
 	decon_info("\n=== CMU_DPU0 SFR DUMP 0x12800800 ===\n");
 	cmu_regs = ioremap(0x12800800, 0x08);
 	print_hex_dump(KERN_ERR, "", DUMP_PREFIX_ADDRESS, 32, 4,
 			cmu_regs, 0x04, false);
+	iounmap(cmu_regs);
 
 	cmu_regs = ioremap(0x12800810, 0x10);
 	print_hex_dump(KERN_ERR, "", DUMP_PREFIX_ADDRESS, 32, 4,
 			cmu_regs, 0x08, false);
+	iounmap(cmu_regs);
 
 	decon_info("\n=== CMUdd_DPU0 SFR DUMP 0x12801800 ===\n");
 	cmu_regs = ioremap(0x12801808, 0x08);
 	print_hex_dump(KERN_ERR, "", DUMP_PREFIX_ADDRESS, 32, 4,
 			cmu_regs, 0x04, false);
+	iounmap(cmu_regs);
 
 	decon_info("\n=== CMU_DPU0 SFR DUMP 0x12802000 ===\n");
 	cmu_regs = ioremap(0x12802000, 0x74);
 	print_hex_dump(KERN_ERR, "", DUMP_PREFIX_ADDRESS, 32, 4,
 			cmu_regs, 0x70, false);
+	iounmap(cmu_regs);
 
 	cmu_regs = ioremap(0x1280207c, 0x100);
 	print_hex_dump(KERN_ERR, "", DUMP_PREFIX_ADDRESS, 32, 4,
 			cmu_regs, 0x94, false);
+	iounmap(cmu_regs);
 
 	decon_info("\n=== CMU_DPU0 SFR DUMP 0x12803000 ===\n");
 	cmu_regs = ioremap(0x12803004, 0x10);
 	print_hex_dump(KERN_ERR, "", DUMP_PREFIX_ADDRESS, 32, 4,
 			cmu_regs, 0x0c, false);
+	iounmap(cmu_regs);
 
 	cmu_regs = ioremap(0x12803014, 0x2C);
 	print_hex_dump(KERN_ERR, "", DUMP_PREFIX_ADDRESS, 32, 4,
 			cmu_regs, 0x28, false);
+	iounmap(cmu_regs);
 
 	cmu_regs = ioremap(0x1280304c, 0x20);
 	print_hex_dump(KERN_ERR, "", DUMP_PREFIX_ADDRESS, 32, 4,
 			cmu_regs, 0x18, false);
+	iounmap(cmu_regs);
 
 	decon_info("\n=== PMU_DPU0 SFR DUMP 0x16484064 ===\n");
 	pmu_regs = ioremap(0x16484064, 0x08);
 	print_hex_dump(KERN_ERR, "", DUMP_PREFIX_ADDRESS, 32, 4,
 			pmu_regs, 0x04, false);
+	iounmap(pmu_regs);
 
 	decon_info("\n=== PMU_DPU1 SFR DUMP 0x16484084 ===\n");
 	pmu_regs = ioremap(0x16484084, 0x08);
 	print_hex_dump(KERN_ERR, "", DUMP_PREFIX_ADDRESS, 32, 4,
 			pmu_regs, 0x04, false);
+	iounmap(pmu_regs);
 
 	return 0;
 }
@@ -1103,50 +1092,6 @@ out:
 	return ret;
 }
 
-#if 0
-static int decon_dp_disable(struct decon_device *decon)
-{
-	struct decon_mode_info psr;
-	int ret = 0;
-
-	decon_info("disable decon displayport\n");
-
-	mutex_lock(&decon->lock);
-
-	if (IS_DECON_OFF_STATE(decon)) {
-		decon_info("decon%d already disabled\n", decon->id);
-		goto err;
-	}
-
-	kthread_flush_worker(&decon->up.worker);
-
-	decon_to_psr_info(decon, &psr);
-	decon_reg_set_int(decon->id, &psr, 0);
-	ret = decon_reg_stop(decon->id, decon->dt.out_idx[0], &psr, true,
-			decon->lcd_info->fps);
-	if (ret < 0)
-		decon_dump(decon);
-
-	/* DMA protection disable must be happen on dpp domain is alive */
-	if (decon->dt.out_type != DECON_OUT_WB) {
-#if defined(CONFIG_EXYNOS_CONTENT_PATH_PROTECTION)
-		decon_set_protected_content(decon, NULL);
-#endif
-		decon->cur_using_dpp = 0;
-		decon_dpp_stop(decon, false);
-	}
-
-#if defined(CONFIG_EXYNOS_BTS)
-	decon->bts.ops->bts_release_bw(decon);
-#endif
-
-	decon->state = DECON_STATE_OFF;
-err:
-	mutex_unlock(&decon->lock);
-	return ret;
-}
-#endif
-
 static int decon_blank(int blank_mode, struct fb_info *info)
 {
 	struct decon_win *win = info->par;
@@ -1254,13 +1199,6 @@ int decon_wait_for_vsync(struct decon_device *decon, u32 timeout)
 	ktime_t timestamp;
 	struct decon_mode_info psr;
 	int ret;
-#if 0
-	struct dsim_device *dsim;
-	int connected;
-#if defined(CONFIG_EXYNOS_READ_ESD_SOLUTION)
-	int ret2;
-#endif
-#endif
 
 	decon_to_psr_info(decon, &psr);
 
@@ -1300,33 +1238,6 @@ int decon_wait_for_vsync(struct decon_device *decon, u32 timeout)
 		} else {
 			decon_err("decon%d wait for vsync timeout\n", decon->id);
 		}
-#if 0
-		if (psr.out_type == DECON_OUT_DSI) {
-			//dsim = v4l2_get_subdevdata(decon->out_sd[0]);
-			dsim = container_of(decon->out_sd[0], struct dsim_device, sd);
-			connected = dsim_call_panel_ops(dsim, EXYNOS_PANEL_IOC_CONNECTED, NULL);
-			if (!connected) {
-				decon_err("%s:%d, panel is not connected...\n", __func__, __LINE__);
-				decon_info("decon-%d: set bypass %s\n", decon->id, !connected ? "on" : "off");
-				decon_bypass_on(decon);
-
-#if defined(CONFIG_EXYNOS_READ_ESD_SOLUTION)
-			} else {
-				decon_set_esd_recovery(decon, true);
-				decon_bypass_on(decon);
-				if (decon->esd.thread) {
-					ret2 = wake_up_process(decon->esd.thread);
-					decon_info("%s:%d, wakeup esd thread(%d)\n",
-							__func__, __LINE__, ret2);
-				}
-				ret = 0;
-			}
-#else
-			} else
-				ret = -ETIMEDOUT;
-#endif /* #if defined(CONFIG_EXYNOS_READ_ESD_SOLUTION) */
-		} else
-#endif
 		return -ETIMEDOUT;
 	}
 
@@ -2541,13 +2452,15 @@ static void decon_update_regs(struct decon_device *decon,
 #endif
 			BUG();
 		}
-		DPU_DEBUG_DMA_BUF("frame_start\n");
-		for (i = 0; i < decon->dt.max_win; i++) {
-			if (regs->win_regs[i].wincon & WIN_EN_F(i)) {
-				for (j = 0; j < MAX_PLANE_CNT; j++) {
-					if (regs->dma_buf_data[i][j].dma_buf)
-						DPU_DEBUG_DMA_BUF("dma_buf_%d[%p]\n",
-								i, regs->dma_buf_data[i][j].dma_buf);
+		if (dpu_dma_buf_log_level) {
+			DPU_DEBUG_DMA_BUF("frame_start\n");
+			for (i = 0; i < decon->dt.max_win; i++) {
+				if (regs->win_regs[i].wincon & WIN_EN_F(i)) {
+					for (j = 0; j < MAX_PLANE_CNT; j++) {
+						if (regs->dma_buf_data[i][j].dma_buf)
+							DPU_DEBUG_DMA_BUF("dma_buf_%d[%p]\n",
+									i, regs->dma_buf_data[i][j].dma_buf);
+					}
 				}
 			}
 		}
@@ -2713,7 +2626,7 @@ static void decon_update_regs_handler(struct kthread_work *work)
 			list_del(&data->list);
 			decon_systrace(decon, 'C',
 					"update_regs_list", 0);
-			kfree(data);
+			decon_reg_data_free(data);
 			atomic_dec(&decon->up.remaining_frame);
 		}
 	}
@@ -2878,7 +2791,6 @@ static int decon_set_win_config(struct decon_device *decon,
 	mutex_lock(&decon->lock);
 
 	if (IS_DECON_OFF_STATE(decon) ||
-//		decon->ignore_vsync ||
 #if defined(CONFIG_EXYNOS_COMMON_PANEL) || \
 	defined(CONFIG_EXYNOS_READ_ESD_SOLUTION)
 		decon_is_bypass(decon) ||
@@ -2902,7 +2814,7 @@ static int decon_set_win_config(struct decon_device *decon,
 		goto err;
 	}
 
-	regs = kzalloc(sizeof(struct decon_reg_data), GFP_KERNEL);
+	regs = decon_reg_data_alloc();
 	if (!regs) {
 		decon_err("could not allocate decon_reg_data\n");
 		ret = -ENOMEM;
@@ -3004,7 +2916,7 @@ err_prepare:
 		for (j = 0; j < regs->plane_cnt[i]; ++j)
 			decon_free_unused_buf(decon, regs, i, j);
 
-	kfree(regs);
+	decon_reg_data_free(regs);
 err:
 	mutex_unlock(&decon->lock);
 	return ret;
@@ -3118,32 +3030,6 @@ static int decon_set_color_mode(struct decon_device *decon,
 
 	return ret;
 }
-
-/* Android O version does not support non translation */
-#if 0
-//#if !defined(CONFIG_ANDROID_SYSTEM_AS_ROOT)
-static void decon_translate_idma2ch(struct decon_device *decon,
-		struct decon_win_config_data *win_data)
-{
-	int i;
-	struct decon_win_config *config;
-	struct decon_win_config *win_config = win_data->config;
-
-	for (i = 0; i < decon->dt.max_win; i++) {
-		config = &win_config[i];
-
-		switch (config->state) {
-		case DECON_WIN_STATE_COLOR:
-		case DECON_WIN_STATE_BUFFER:
-		case DECON_WIN_STATE_CURSOR:
-			config->channel = DPU_DMA2CH(config->channel);
-			break;
-		default:
-			break;
-		}
-	}
-}
-#endif
 
 static int decon_get_vsync_change_timeline(struct decon_device *decon,
 		struct vsync_applied_time_data *vsync_time)
@@ -3263,18 +3149,6 @@ static int decon_ioctl(struct fb_info *info, unsigned int cmd,
 			break;
 		}
 
-/* Android O version does not support non translation */
-#if 0
-//#if !defined(CONFIG_ANDROID_SYSTEM_AS_ROOT)
-		/*
-		 * channel is translated to DPP channel number temporarily.
-		 * In the future, user side will use DPP channel number instead
-		 * of channel.
-		 * If use side uses DPP channel number for S3CFB_WIN_CONFIG parameter,
-		 * this function will be removed.
-		 */
-		decon_translate_idma2ch(decon, &win_data);
-#endif
 		ret = decon_set_win_config(decon, &win_data);
 		if (ret)
 			break;
@@ -3671,29 +3545,6 @@ int decon_release(struct fb_info *info, int user)
 	struct decon_device *decon = win->decon;
 
 	decon_info("%s + : %d\n", __func__, decon->id);
-
-#if 0
-	if (decon->id && decon->dt.out_type == DECON_OUT_DSI) {
-		decon_get_out_sd(decon);
-		decon_info("output device of decon%d is changed to %s\n",
-				decon->id, decon->out_sd[0]->name);
-	}
-
-	if (decon->dt.out_type == DECON_OUT_DSI) {
-		decon_hiber_block_exit(decon);
-		/* Unused DECON state is DECON_STATE_INIT */
-		if (IS_DECON_ON_STATE(decon))
-			decon_disable(decon);
-		decon_hiber_unblock(decon);
-	}
-
-	if (decon->dt.out_type == DECON_OUT_DP) {
-		/* Unused DECON state is DECON_STATE_INIT */
-		if (IS_DECON_ON_STATE(decon))
-			decon_dp_disable(decon);
-	}
-
-#endif
 	decon_info("%s - : %d\n", __func__, decon->id);
 
 	return 0;
@@ -3893,7 +3744,7 @@ static void decon_unregister_subdevs(struct decon_device *decon)
 
 static void decon_release_windows(struct decon_win *win)
 {
-	if (win->fbinfo)
+	if (win && win->fbinfo)
 		framebuffer_release(win->fbinfo);
 }
 
@@ -4162,7 +4013,7 @@ static int decon_acquire_windows(struct decon_device *decon)
 		ret = decon_acquire_window(decon, i);
 		if (ret < 0) {
 			decon_err("failed to create decon-int window[%d]\n", i);
-			for (; i >= 0; i--)
+			for (i = i - 1; i >= 0; i--)
 				decon_release_windows(decon->win[i]);
 			return ret;
 		}
@@ -4435,7 +4286,7 @@ static int decon_initial_display(struct decon_device *decon, bool is_colormap)
 	fbinfo = decon->win[decon->dt.dft_win]->fbinfo;
 
 	pm_stay_awake(decon->dev);
-	dev_warn(decon->dev, "pm_stay_awake");
+	dev_dbg(decon->dev, "pm_stay_awake\n");
 
 	if (decon->dt.psr_mode != DECON_VIDEO_MODE) {
 		if (decon->res.pinctrl && decon->res.hw_te_on) {
@@ -4610,7 +4461,6 @@ static int decon_probe(struct platform_device *pdev)
 	decon_create_timeline(decon, device_name);
 
 	/* systrace */
-	decon_systrace_enable = 0;
 	decon->systrace.pid = 0;
 
 	/* debug trivial */
@@ -4740,7 +4590,9 @@ err_fsync:
 err_vsync:
 	iounmap(decon->res.ss_regs);
 err_res:
-	kfree(decon);
+	/* decon was allocated with devm_kzalloc(): devm frees it
+	 * automatically on probe failure, so it must NOT be kfree()'d
+	 * here as well (that used to double-free this pointer). */
 err:
 	decon_err("decon probe fail");
 	return ret;
@@ -4830,6 +4682,7 @@ static int exynos_decon_register(void)
 
 static void exynos_decon_unregister(void)
 {
+	decon_reg_data_cache_purge();
 	platform_driver_unregister(&decon_driver);
 }
 late_initcall(exynos_decon_register);
